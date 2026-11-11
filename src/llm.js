@@ -7,7 +7,7 @@ const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/openai/';
 
 export function makeLLM(env = process.env) {
   if (!env.GEMINI_API_KEY) return null;
-  const models = (env.GEMINI_MODELS || 'gemini-2.5-flash,gemini-2.5-flash-lite').split(',').map((s) => s.trim()).filter(Boolean);
+  const models = (env.GEMINI_MODELS || 'gemini-3.5-flash,gemini-3.5-flash-lite,gemini-3.1-flash-lite').split(',').map((s) => s.trim()).filter(Boolean);
   const client = new OpenAI({ apiKey: env.GEMINI_API_KEY, baseURL: GEMINI_BASE, maxRetries: 0, timeout: 60_000 });
   return {
     provider: 'gemini',
