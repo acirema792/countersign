@@ -78,6 +78,11 @@ Also used: **Google Gemini 3.5 Flash-Lite** (falls back to 3.1 Flash-Lite) throu
 | `PAYEE_MATCHES_VENDOR_ON_FILE` | Email claims to be a known vendor but names a different payee | BLOCK |
 | `PAYEE_ON_FILE`, `MATCHES_OPEN_BILL` | Pay only vendors on file, only open bills, exact amount | HOLD |
 | `NOT_ALREADY_PAID` | No duplicate payment of a paid bill | BLOCK |
+| `NO_PAYEE_CHANGE_IN_EMAIL` | An email that tries to change a vendor's payment address cannot trigger any payment on its own | HOLD |
+| `CURRENCY_USD`, `PAYEE_PLAIN_ASCII`, `AMOUNT_POSITIVE` | No currency tricks, no look-alike Unicode payees, no negative amounts | BLOCK |
+| `RETURN_BEFORE_FULL_REFUND` | A full refund of a delivered order needs the owner | HOLD |
+| `REQUESTER_IS_RECIPIENT`, `SINGLE_RECIPIENT`, `STANDARD_TERMS` | Invoices only for the customer who asked, one recipient, USD, list prices, no discounts or partial payments | HOLD |
+| `NOT_ALREADY_SENT`, `NO_EXTRA_RECIPIENTS` | An invoice is sent once, only to its draft recipient | BLOCK / HOLD |
 | `RECIPIENT_IS_CUSTOMER`, `PRICES_FROM_CATALOG` | Invoices only to customers, at list prices | HOLD |
 | `AUTO_REFUND_LIMIT`, `AUTO_PAYMENT_LIMIT`, `DAILY_BUDGET` | $150 / $400 per action, $600 per day automatic | HOLD |
 | `UNTRUSTED_INSTRUCTIONS` | Hidden HTML text or instructions addressed to the AI | HOLD |
