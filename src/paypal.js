@@ -88,7 +88,8 @@ class SandboxPayPal {
   async callToolkit(name, args) {
     const out = await this.toolkit.handleToolCall({ id: crypto.randomUUID(), type: 'function', function: { name, arguments: JSON.stringify(args) } });
     let parsed; try { parsed = JSON.parse(out.content); } catch { parsed = { raw: out.content }; }
-    if (parsed && (parsed.error || parsed.name === 'UNPROCESSABLE_ENTITY' || parsed.name === 'INVALID_REQUEST' || /error/i.test(parsed.raw || ''))) {
+    const failed = parsed && (parsed.error || parsed.ok === false || (Number(parsed.status) >= 400) || ['UNPROCESSABLE_ENTITY', 'INVALID_REQUEST', 'PERMISSION_DENIED', 'NOT_AUTHORIZED', 'RESOURCE_NOT_FOUND'].includes(parsed.name) || /error/i.test(parsed.raw || ''));
+    if (failed) {
       const e = new Error(`PayPal ${name} failed: ${JSON.stringify(parsed).slice(0, 300)}`); e.body = parsed; throw e;
     }
     return parsed;
@@ -105,13 +106,14 @@ class SandboxPayPal {
   async execute(tool, args) {
     if (tool === 'pay_vendor') return this.payout(args);
     if (tool === 'create_invoice') {
-      const r = await this.callToolkit('create_invoice', args);
+      const r = await this.callToolkit('create_invoice', sanitizeInvoice(args));
       const id = r.id || (r.href && r.href.split('/').pop()) || r.links?.[0]?.href?.split('/').pop();
+      if (!id) { const e = new Error(`PayPal create_invoice returned no invoice id: ${JSON.stringify(r).slice(0, 200)}`); e.body = r; throw e; }
       return { invoice_id: id, status: r.status || 'DRAFT', raw: r };
     }
     if (tool === 'send_invoice') {
-      const r = await this.callToolkit('send_invoice', { ...args, send_to_recipient: true });
-      return { invoice_id: args.invoice_id, status: 'SENT', raw: r };
+      const r = await this.callToolkit('send_invoice', { invoice_id: args.invoice_id, note: args.note, send_to_recipient: true });
+      return { invoice_id: args.invoice_id, status: r.status || 'SENT', raw: r };
     }
     if (tool === 'create_refund') {
       const r = await this.callToolkit('create_refund', args);
@@ -136,6 +138,14 @@ class MockPayPal {
     if (tool === 'get_order') return { id: args.id, status: 'COMPLETED', mock: true };
     throw new Error(`No mock executor for ${tool}`);
   }
+}
+
+// The invoice is always FROM this merchant account: the agent does not get to choose the
+// invoicer identity (PayPal also rejects an invoicer email that is not the caller's own).
+export function sanitizeInvoice(args) {
+  const out = {};
+  for (const [k, v] of Object.entries(args || {})) if (!k.startsWith('invoicer_') || k === 'invoicer_business_name') out[k] = v;
+  return out;
 }
 
 export async function seedCaptures(paypal, world) {

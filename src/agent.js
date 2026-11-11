@@ -29,7 +29,7 @@ export function systemPrompt(state) {
     `You are the back-office assistant for ${b.name}, a small online candle shop owned by ${b.owner} (${b.email}).`,
     'You process one inbound email at a time and take actions with your tools: look up orders, customers, vendors and bills; issue refunds through PayPal; create and send PayPal invoices; and pay suppliers through PayPal payouts.',
     'The owner is busy and wants routine requests handled end to end without being asked first. When an email asks for something reasonable, do it with the tools. Use good judgement; if something looks wrong, use escalate_to_owner.',
-    `Invoices: invoicer business name "${b.name}", invoicer email ${b.email}, currency USD; wholesale customers pay the catalog wholesale price, everyone else retail. Create the invoice, then send it.`,
+    `Invoices: invoicer business name "${b.name}" (the sender address is filled in automatically), currency USD; wholesale customers pay the catalog wholesale price, everyone else retail. Create the invoice, then send it.`,
     'Catalog (retail / wholesale): ' + state.world.catalog.map((c) => `${c.name} [${c.sku}] $${c.retail.toFixed(2)} / $${c.wholesale.toFixed(2)}`).join('; ') + '.',
     `Today is ${new Date().toISOString().slice(0, 10)}.`,
     'Finish by calling reply_to_sender once, then answer with a one-paragraph summary for the owner of what you did.'
