@@ -139,3 +139,5 @@ dialog .row { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10
 .apmsg { font-size: 12.5px; padding: 8px 10px; border-radius: 8px; margin-bottom: 8px; }
 .apmsg.no { background: var(--blockbg); color: var(--block); font-weight: 600; }
 .apmsg.ok { background: var(--allowbg); color: var(--allow); font-weight: 600; }
+
+[hidden] { display: none !important; }

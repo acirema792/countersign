@@ -201,7 +201,7 @@ async function decide(id, act, btn) {
   $('#apMsg').className = 'apmsg'; $('#apMsg').textContent = '';
   try {
     const r = await api(`/api/approvals/${id}/${act}`, { method: 'POST', body: JSON.stringify({ pin: $('#pin').value }) });
-    showApMsg(act === 'approve' ? `Countersigned. ${r.result && r.result.via === 'sandbox' ? 'Sent to the PayPal sandbox' : 'Executed'}: ${r.result ? (r.result.refund_id || r.result.payout_batch_id || r.result.invoice_id || '') : ''}` : 'Rejected. Nothing was sent to PayPal.', 'ok');
+    showApMsg(act === 'approve' ? `Countersigned. ${r.result && r.result.via === 'sandbox' ? 'Sent to the PayPal sandbox' : 'Executed (simulated capture)'}: ${r.result ? (r.result.refund_id || r.result.payout_batch_id || r.result.invoice_id || '') : ''}` : 'Rejected. Nothing was sent to PayPal.', 'ok');
   } catch (e) { showApMsg(e.message, 'no'); }
   await loadSession();
 }
