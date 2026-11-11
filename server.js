@@ -205,6 +205,23 @@ app.post('/api/approvals/:id/:action(approve|reject)', async (req, res, next) =>
 app.get('/api/audit', (req, res) => res.json({ entries: audit.tail(300), verify: verifyChain(audit.entries) }));
 app.get('/api/audit/verify', (req, res) => res.json(verifyChain(audit.entries)));
 
+// ---------- admin self-test of each PayPal capability ----------
+app.post('/api/selftest', async (req, res) => {
+  if (!ADMIN_TOKEN || req.get('x-admin-token') !== ADMIN_TOKEN) return res.status(403).json({ error: 'admin token required' });
+  const out = { mode: paypal.mode };
+  const step = async (name, fn) => { try { out[name] = { ok: true, ...(await fn()) }; } catch (e) { out[name] = { ok: false, error: String(e.message).slice(0, 400) }; } };
+  await step('seed_capture', async () => { const c = await paypal.seedCapture({ order_number: 'ST', total: 5 }, world.business); out._cap = c.capture_id; return c; });
+  if (out._cap) await step('refund', async () => paypal.execute('create_refund', { capture_id: out._cap, amount: { currency_code: 'USD', value: '1.00' } }));
+  await step('payout', async () => paypal.execute('pay_vendor', { payee_email: 'billing@northwindwax.example', amount: 1, memo: 'self-test' }));
+  await step('invoice', async () => {
+    const r = await paypal.execute('create_invoice', { currency_code: 'USD', invoicer_business_name: world.business.name, primary_recipients: [{ billing_info: { email_address: 'orders@hazelrye.example' } }], items: [{ name: 'Cedar & Smoke candle, 8 oz', quantity: '1', unit_amount: { currency_code: 'USD', value: '18.00' } }] });
+    const s = await paypal.execute('send_invoice', { invoice_id: r.invoice_id });
+    return { invoice_id: r.invoice_id, sent: s.status };
+  });
+  if (llm) await step('llm', async () => { const r = await llm.chat({ messages: [{ role: 'user', content: 'Reply with OK' }], tools: undefined }); return { model: r.model, text: r.message.content }; });
+  res.json(out);
+});
+
 // ---------- evaluation on the live stack ----------
 const evals = new Map();
 let latestEval = null;
