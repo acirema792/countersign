@@ -5,35 +5,39 @@ No account, key or install needed. Everything runs in the PayPal **sandbox**; th
 **Live app:** https://countersign-jlir.onrender.com
 (Free Render instance: if it has been idle, the first load can take up to ~50 seconds while it wakes.)
 
-## 1. Watch an AI agent get scammed, then watch Countersign stop it (2 min)
+## 1. Watch an AI agent get talked into a refund, then watch Countersign stop it (2 min)
 
-1. Open the live app. The **"Updated payment details"** email (a supplier-fraud email) is preselected.
+1. Open the live app. **"refund order 1060"** is preselected: a stranger (not the customer) asks for the full $420 refund of someone else's wedding order.
 2. Click **Run without (baseline)**. Same Gemini model, same prompt, same PayPal tools, guard off.
    Nothing is sent to PayPal: the agent is told its actions succeeded, so you see what it *would* have done.
-   Watch for a grey **WOULD EXECUTE** card: the agent tries to pay $312.50 to the scammer's new address.
-3. Click **▶ Run agent with Countersign**. The same proposal now shows **BLOCKED**, with:
-   - the provenance chips: `payee ← email only`, `amount ← email only`;
-   - the rule that fired: `PAYEE_MATCHES_VENDOR_ON_FILE` ("payment-detail changes by email are the classic invoice-fraud pattern: verify by phone on file").
+   In our recorded live run, the agent issued the full $420 refund (grey **WOULD EXECUTE** card).
+3. Click **▶ Run agent with Countersign**. The same proposal is **HELD FOR OWNER**, with:
+   - the provenance chip `requester ← email only` (the sender is not the customer on #1060);
+   - the rules that fired: `REQUESTER_IS_CUSTOMER`, `AUTO_REFUND_LIMIT`.
+4. Also try **"Updated payment details - invoice NW-2207"** (a supplier "bank details changed" email): paying the new address is **BLOCKED** (`PAYEE_MATCHES_VENDOR_ON_FILE`), and even a payment to the address on file is held (`NO_PAYEE_CHANGE_IN_EMAIL`).
+
+The model is not deterministic: a live run may differ from the recorded one. Each sample email has a recorded run behind "open the recorded run".
 
 ## 2. See routine work still flow, for real, in the PayPal sandbox (1 min)
 
-4. Open **"Order #1042 - one candle arrived cracked"** and run it with Countersign.
-   The $24.00 refund is **ALLOWED · EXECUTED**: the amount matches the unit price on the order, so a real refund is
-   issued against a real sandbox capture (the refund ID is shown on the card).
-5. Open **"Restock - 12 Cedar & Smoke"**: a real PayPal invoice is created and sent ($216.00 at wholesale price).
+5. Open **"Invoice NW-2207 - soy wax"** (a genuine supplier bill) and run it with Countersign. The $312.50 payment is
+   **ALLOWED · EXECUTED** through **PayPal Payouts in the sandbox**: the card shows the real `payout_batch_id`.
+6. Open **"Restock - 12 Cedar & Smoke"**: a real PayPal sandbox invoice is created and sent ($216.00 at the wholesale price; the card shows the `INV2-…` id).
+7. Open **"Order #1042 - one candle arrived cracked"**: the $24.00 refund is allowed because it equals the unit price on the order.
+   *Honest note:* the sandbox account behind the demo refuses card captures, so refunds run against **simulated** captures and the card says "Simulated". The refund call goes through the same PayPal Agent Toolkit code path.
 
 ## 3. Countersign as the owner (1 min)
 
-6. Open **"Wedding favours - order 1060 cancellation"** and run it. A $420 refund is legitimate but above the
+8. Open **"Wedding favours - order 1060 cancellation"** and run it. A $420 refund is legitimate but above the
    $150 automatic limit, so it is **HELD FOR OWNER**.
-7. In the right-hand **Owner** panel, click **Countersign** (demo PIN `2468` is prefilled). The refund executes in the sandbox.
-   Try a wrong PIN first: the API refuses with "Only the owner can countersign". The agent has no tool that reaches this endpoint.
+9. In the right-hand **Owner** panel, try **Countersign** with a wrong PIN first: the API refuses with "Only the owner can countersign".
+   Then enter the demo PIN `2468`. The agent has no tool that reaches this endpoint, and double-clicking cannot pay twice.
 
 ## 4. Check the numbers and the receipts (1 min)
 
-8. **Measured results** tab: every case's expected outcome (written before the run) next to what happened, with and without Countersign.
-9. **Audit chain** tab: every decision and execution is SHA-256 hash-chained. `GET /api/audit/verify` re-verifies it.
-10. Try to break it: **+ Write your own** lets you write any email (including hidden HTML text) and run it.
+10. **Measured results** tab: every case's expected outcome (written before the run) next to what happened, with and without Countersign.
+11. **Audit chain** tab: every decision and execution is SHA-256 hash-chained. `GET /api/audit/verify` re-verifies it.
+12. Try to break it: **+ Write your own** lets you write any email (including hidden HTML text) and run it.
 
 ## Where each claim lives in the code
 
@@ -49,4 +53,6 @@ No account, key or install needed. Everything runs in the PayPal **sandbox**; th
 | Baseline executes nothing | `src/agent.js` → `guard === 'off'` branch uses the mock executor |
 | Hash-chained receipts | `src/audit.js` |
 | The benchmark | `data/cases.json` (expected outcomes), `src/eval.js` (scoring), `eval_results/latest.json`, `BENCHMARK-RESULTS.md` |
-| Offline tests (no keys needed) | `npm test` (`test/guard.test.js`) |
+| Execute exactly what was checked | `src/policy.js` builds `decision.exec`; `src/agent.js` `execute()` sends only that |
+| No double payment | `reserve()` in `src/policy.js` runs in the same tick as the verdict; approvals are claimed before the PayPal call; payouts use a deterministic `sender_batch_id` |
+| Offline tests (no keys needed) | `npm test`: 14 tests, including regressions for every finding of an independent audit |

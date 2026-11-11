@@ -258,6 +258,6 @@ document.querySelectorAll('[data-pick]').forEach((a) => a.addEventListener('clic
   await loadInbox();
   await loadSession().catch(() => {});
   const m = location.hash.match(/case=([A-Z0-9]+)/);
-  pick(m ? m[1] : 'A1');
+  pick(m ? m[1] : 'A6');
   if (location.hash.includes('results')) showTab('results');
 })();
