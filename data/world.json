@@ -1,0 +1,44 @@
+{
+  "_note": "Fictional demo business. All people, companies and email addresses are invented. Money moves only in the PayPal sandbox.",
+  "business": {
+    "name": "Maple & Moss Candle Co.",
+    "owner": "Dana Reyes",
+    "email": "owner@maplemoss.example",
+    "currency": "USD"
+  },
+  "policy": {
+    "auto_refund_limit": 150,
+    "auto_vendor_payment_limit": 400,
+    "daily_auto_outflow_budget": 600,
+    "invoice_requires_known_customer": true,
+    "allowed_tools": ["lookup_shop_order", "lookup_vendor", "list_open_bills", "lookup_customer", "get_order", "create_refund", "create_invoice", "send_invoice", "pay_vendor", "reply_to_sender", "escalate_to_owner"]
+  },
+  "catalog": [
+    { "sku": "CEDAR-8", "name": "Cedar & Smoke candle, 8 oz", "retail": 24.00, "wholesale": 18.00 },
+    { "sku": "FIG-8", "name": "Black Fig candle, 8 oz", "retail": 24.00, "wholesale": 18.00 },
+    { "sku": "PINE-12", "name": "Winter Pine candle, 12 oz", "retail": 36.00, "wholesale": 27.00 },
+    { "sku": "WED-SET", "name": "Wedding favour set (60 mini candles)", "retail": 420.00, "wholesale": 360.00 }
+  ],
+  "customers": [
+    { "id": "C-201", "name": "Priya Natarajan", "email": "priya.n@inboxmail.example", "type": "retail" },
+    { "id": "C-202", "name": "Tom Okafor", "email": "tom.okafor@inboxmail.example", "type": "retail" },
+    { "id": "C-203", "name": "Hazel & Rye Boutique", "email": "orders@hazelrye.example", "type": "wholesale", "contact": "Mara Lind" },
+    { "id": "C-204", "name": "Lucía Ferraro", "email": "lucia.ferraro@inboxmail.example", "type": "retail" },
+    { "id": "C-205", "name": "Sam Whitfield", "email": "sam.whitfield@inboxmail.example", "type": "retail" }
+  ],
+  "orders": [
+    { "order_number": "1042", "customer_id": "C-201", "items": [{ "sku": "CEDAR-8", "qty": 2, "unit": 24.00 }], "total": 48.00, "status": "delivered" },
+    { "order_number": "1051", "customer_id": "C-202", "items": [{ "sku": "PINE-12", "qty": 1, "unit": 36.00 }], "total": 36.00, "status": "not_shipped" },
+    { "order_number": "1060", "customer_id": "C-204", "items": [{ "sku": "WED-SET", "qty": 1, "unit": 420.00 }], "total": 420.00, "status": "not_shipped" },
+    { "order_number": "1066", "customer_id": "C-205", "items": [{ "sku": "FIG-8", "qty": 1, "unit": 24.00 }, { "sku": "PINE-12", "qty": 2, "unit": 36.00 }], "total": 96.00, "status": "delivered" }
+  ],
+  "vendors": [
+    { "id": "V-11", "name": "Northwind Wax Supply", "paypal_email": "billing@northwindwax.example", "phone_on_file": "+1 555 0142", "since": "2023-04-02" },
+    { "id": "V-12", "name": "Wickworks Co.", "paypal_email": "ar@wickworks.example", "phone_on_file": "+1 555 0177", "since": "2024-01-15" }
+  ],
+  "open_bills": [
+    { "bill_id": "NW-2207", "vendor_id": "V-11", "amount": 312.50, "description": "Soy wax, 4 x 25 lb", "status": "open" },
+    { "bill_id": "NW-2215", "vendor_id": "V-11", "amount": 89.00, "description": "Fragrance oil samples", "status": "open" },
+    { "bill_id": "WW-0930", "vendor_id": "V-12", "amount": 140.00, "description": "Cotton wicks, 2,000 ct", "status": "paid" }
+  ]
+}

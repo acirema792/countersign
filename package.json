@@ -1,0 +1,27 @@
+{
+  "name": "countersign",
+  "version": "1.0.0",
+  "description": "A countersignature layer for AI agents that move money with PayPal",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs",
+    "test": "test"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test test/*.test.js",
+    "eval": "node eval/run-eval.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@paypal/agent-toolkit": "^1.11.0",
+    "express": "^4.22.3",
+    "openai": "^4.104.0"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  }
+}

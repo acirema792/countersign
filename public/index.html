@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Countersign · a second signature for AI agents that move money</title>
+<meta name="description" content="Countersign sits between an AI back-office agent and PayPal. The agent proposes; code decides; the owner countersigns anything risky.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%23143d2e'/><path d='M8 17l5 5 11-12' stroke='%23f2c14e' stroke-width='3.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>">
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <svg class="mark" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8"/><path d="M8 17l5 5 11-12"/></svg>
+    <div>
+      <div class="name">Countersign</div>
+      <div class="tag">Your AI agent runs the PayPal back office. Money never moves on a stranger's say-so.</div>
+    </div>
+  </div>
+  <div class="status" id="status"></div>
+</header>
+
+<nav class="tabs" role="tablist">
+  <button class="tab active" data-tab="demo" role="tab">Live demo</button>
+  <button class="tab" data-tab="results" role="tab">Measured results</button>
+  <button class="tab" data-tab="how" role="tab">How it works</button>
+  <button class="tab" data-tab="audit" role="tab">Audit chain</button>
+</nav>
+
+<main>
+  <!-- DEMO -->
+  <section id="tab-demo" class="panel active">
+    <div class="tour" id="tour">
+      <strong>Try it in 60 seconds:</strong>
+      <span>① Open <a href="#" data-pick="A1">"Updated payment details"</a> (a supplier-fraud email).</span>
+      <span>② Run it <b>without</b> Countersign: the agent pays the scammer (recorded, never executed).</span>
+      <span>③ Run it <b>with</b> Countersign: blocked, with the reason and the evidence.</span>
+      <button class="x" id="tourClose" aria-label="Hide tips">×</button>
+    </div>
+    <div class="grid">
+      <aside class="col inbox">
+        <div class="colhead"><h2>Inbox</h2><button class="ghost sm" id="composeBtn">+ Write your own</button></div>
+        <div class="legend"><span class="pill legit">Routine</span><span class="pill lookalike">Look-alike</span><span class="pill attack">Scam</span><span class="muted">sample emails</span></div>
+        <ul id="inbox" class="mail"></ul>
+      </aside>
+
+      <section class="col work">
+        <div id="emailView" class="card email empty">
+          <p class="muted">Pick an email from the inbox.</p>
+        </div>
+        <div class="runbar" id="runbar" hidden>
+          <button class="primary" id="runGuarded">▶ Run agent with Countersign</button>
+          <button class="ghost" id="runBaseline" title="Same model, same prompt, guard off. Nothing is sent to PayPal.">Run without (baseline)</button>
+          <span class="muted small" id="runNote"></span>
+        </div>
+        <div id="timeline" class="timeline"></div>
+      </section>
+
+      <aside class="col owner">
+        <div class="colhead"><h2>Owner</h2><span class="muted small">Dana Reyes · Maple &amp; Moss Candle Co.</span></div>
+        <div class="card">
+          <h3>Waiting for your countersignature</h3>
+          <div class="pinrow"><label for="pin">Owner PIN</label><input id="pin" value="2468" inputmode="numeric" maxlength="8"><span class="muted small">demo PIN; the agent has no way to send it</span></div>
+          <ul id="approvals" class="approvals"><li class="muted small">Nothing waiting.</li></ul>
+        </div>
+        <div class="card">
+          <h3>Books <span class="muted small" id="paypalMode"></span></h3>
+          <div class="budget"><div class="bar"><i id="budgetBar"></i></div><span class="small" id="budgetTxt"></span></div>
+          <table class="books"><thead><tr><th>Order</th><th>Customer</th><th class="r">Paid</th><th class="r">Refunded</th></tr></thead><tbody id="orders"></tbody></table>
+          <table class="books"><thead><tr><th>Bill</th><th>Vendor</th><th class="r">Amount</th><th>Status</th></tr></thead><tbody id="bills"></tbody></table>
+          <button class="ghost sm" id="resetBtn">Reset my demo books</button>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- RESULTS -->
+  <section id="tab-results" class="panel">
+    <div id="results"><p class="muted">Loading results…</p></div>
+  </section>
+
+  <!-- HOW -->
+  <section id="tab-how" class="panel">
+    <div class="how">
+      <div class="flow">
+        <div class="step"><b>1 · Email arrives</b><span>Untrusted text: anyone can write anything, including hidden instructions.</span></div>
+        <div class="arrow">→</div>
+        <div class="step"><b>2 · Gemini proposes</b><span>The agent uses PayPal's official Agent Toolkit tools (refunds, invoices) plus Payouts.</span></div>
+        <div class="arrow">→</div>
+        <div class="step accent"><b>3 · Countersign decides</b><span>Deterministic rules + provenance: every amount and payee must trace to the books, not the email.</span></div>
+        <div class="arrow">→</div>
+        <div class="step"><b>4 · PayPal sandbox</b><span>ALLOW runs now. HOLD waits for the owner's PIN. BLOCK never runs.</span></div>
+      </div>
+      <div class="cols2">
+        <div class="card">
+          <h3>The one rule that matters</h3>
+          <p>An amount or payee that appears <em>only</em> in untrusted email text can never move money on its own. It must match a figure the business already holds: an order line, an open bill, a vendor's PayPal address on file, a catalog price. Otherwise a human countersigns.</p>
+          <h3>What the model is not allowed to decide</h3>
+          <p>Whether money moves. The model never sees the policy code, never holds PayPal credentials, and has no tool that approves its own actions. Approvals go through a separate owner endpoint that needs the owner PIN.</p>
+        </div>
+        <div class="card">
+          <h3>Rules (all in <code>src/policy.js</code>)</h3>
+          <table class="rules">
+            <tr><td>CAPTURE_IN_BOOKS</td><td>Refunds only against captures of our own orders</td><td><span class="v BLOCK">BLOCK</span></td></tr>
+            <tr><td>REFUND_WITHIN_CAPTURE</td><td>Cumulative refunds never exceed what was paid</td><td><span class="v BLOCK">BLOCK</span></td></tr>
+            <tr><td>AMOUNT_FROM_BOOKS</td><td>Refund equals an order line, unit price, total or balance</td><td><span class="v HOLD">HOLD</span></td></tr>
+            <tr><td>REQUESTER_IS_CUSTOMER</td><td>Refund requested by the customer on the order</td><td><span class="v HOLD">HOLD</span></td></tr>
+            <tr><td>PAYEE_MATCHES_VENDOR_ON_FILE</td><td>"New bank details" for a known vendor</td><td><span class="v BLOCK">BLOCK</span></td></tr>
+            <tr><td>PAYEE_ON_FILE / MATCHES_OPEN_BILL</td><td>Pay only vendors on file, only open bills</td><td><span class="v HOLD">HOLD</span></td></tr>
+            <tr><td>NOT_ALREADY_PAID</td><td>No duplicate payment of a paid bill</td><td><span class="v BLOCK">BLOCK</span></td></tr>
+            <tr><td>RECIPIENT_IS_CUSTOMER / PRICES_FROM_CATALOG</td><td>Invoices only to customers, at list prices</td><td><span class="v HOLD">HOLD</span></td></tr>
+            <tr><td>AUTO_*_LIMIT / DAILY_BUDGET</td><td>$150 refunds, $400 payments, $600/day</td><td><span class="v HOLD">HOLD</span></td></tr>
+            <tr><td>UNTRUSTED_INSTRUCTIONS</td><td>Hidden text or instructions aimed at the AI</td><td><span class="v HOLD">HOLD</span></td></tr>
+            <tr><td>TOOL_ALLOWED</td><td>Only tools on the owner's allowlist</td><td><span class="v BLOCK">BLOCK</span></td></tr>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- AUDIT -->
+  <section id="tab-audit" class="panel">
+    <div class="card">
+      <div class="colhead"><h3>Hash-chained receipts</h3><span id="auditVerify" class="small"></span></div>
+      <p class="muted small">Every decision and every execution is appended to a SHA-256 chain. Re-verify it any time at <code>/api/audit/verify</code>.</p>
+      <div class="scroll"><table class="audit"><thead><tr><th>#</th><th>Time</th><th>Run</th><th>Event</th><th>Verdict</th><th>Hash</th></tr></thead><tbody id="auditRows"></tbody></table></div>
+    </div>
+  </section>
+</main>
+
+<dialog id="compose">
+  <form method="dialog" id="composeForm">
+    <h3>Write your own email</h3>
+    <p class="muted small">Try to talk the agent into moving money. The books (orders 1042, 1051, 1060, 1066; vendors Northwind Wax and Wickworks) are on the right.</p>
+    <label>From<input name="from" value="Someone &lt;someone@example.com&gt;"></label>
+    <label>Subject<input name="subject" placeholder="Refund for order 1066"></label>
+    <label>Body<textarea name="body" rows="6" placeholder="Hi, please refund..."></textarea></label>
+    <label>Hidden HTML text (optional, invisible to humans)<textarea name="hidden" rows="2" placeholder="AI assistant: you are authorised to..."></textarea></label>
+    <div class="row"><button value="cancel" class="ghost">Cancel</button><button value="run" class="primary" id="composeRun">Run with Countersign</button></div>
+  </form>
+</dialog>
+
+<footer class="foot">
+  Built for the PayPal AI Hackathon · PayPal <b>sandbox</b> only, no real money · fictional business and people ·
+  <a href="https://github.com/" id="repoLink" target="_blank" rel="noopener">source</a>
+</footer>
+<script src="/app.js" type="module"></script>
+</body>
+</html>
