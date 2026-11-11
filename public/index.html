@@ -60,7 +60,7 @@
         <div class="colhead"><h2>Owner</h2><span class="muted small">Dana Reyes · Maple &amp; Moss Candle Co.</span></div>
         <div class="card">
           <h3>Waiting for your countersignature</h3>
-          <div class="pinrow"><label for="pin">Owner PIN</label><input id="pin" value="2468" inputmode="numeric" maxlength="8"><span class="muted small">demo PIN; the agent has no way to send it</span></div>
+          <div class="pinrow"><label for="pin">Owner PIN</label><input id="pin" placeholder="PIN" inputmode="numeric" maxlength="8" autocomplete="off"><span class="muted small">demo PIN is <b>2468</b>; the agent has no way to send it</span></div>
           <ul id="approvals" class="approvals"><li class="muted small">Nothing waiting.</li></ul>
         </div>
         <div class="card">
@@ -122,7 +122,7 @@
   <section id="tab-audit" class="panel">
     <div class="card">
       <div class="colhead"><h3>Hash-chained receipts</h3><span id="auditVerify" class="small"></span></div>
-      <p class="muted small">Every decision and every execution is appended to a SHA-256 chain. Re-verify it any time at <code>/api/audit/verify</code>.</p>
+      <p class="muted small">Every decision and every execution is appended to a SHA-256 chain. The head is signed with Ed25519 (public key at <code>/api/audit/pubkey</code>; full export at <code>/api/audit/export</code>). Re-verify any time at <code>/api/audit/verify</code>. The log lives in memory and starts again when the free server restarts.</p><div class="small" id="auditHead"></div>
       <div class="scroll"><table class="audit"><thead><tr><th>#</th><th>Time</th><th>Run</th><th>Event</th><th>Verdict</th><th>Hash</th></tr></thead><tbody id="auditRows"></tbody></table></div>
     </div>
   </section>
@@ -142,7 +142,7 @@
 
 <footer class="foot">
   Built for the PayPal AI Hackathon · PayPal <b>sandbox</b> only, no real money · fictional business and people ·
-  <a href="https://github.com/" id="repoLink" target="_blank" rel="noopener">source</a>
+  <a href="https://github.com/acirema792/countersign" id="repoLink" target="_blank" rel="noopener">source on GitHub</a> · <a href="https://github.com/acirema792/countersign/blob/main/JUDGES.md" target="_blank" rel="noopener">5-minute review guide</a>
 </footer>
 <script src="/app.js" type="module"></script>
 </body>

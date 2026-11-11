@@ -55,7 +55,7 @@ class SandboxPayPal {
   async rest(method, p, body, extraHeaders = {}) {
     const r = await fetch(`${BASE}${p}`, {
       method,
-      headers: { Authorization: `Bearer ${await this.token()}`, 'Content-Type': 'application/json', 'PayPal-Request-Id': crypto.randomUUID(), ...extraHeaders },
+      headers: { Authorization: `Bearer ${await this.token()}`, 'Content-Type': 'application/json', 'PayPal-Request-Id': extraHeaders['PayPal-Request-Id'] || crypto.randomUUID(), ...extraHeaders },
       body: body ? JSON.stringify(body) : undefined
     });
     const text = await r.text();
@@ -95,9 +95,10 @@ class SandboxPayPal {
     return parsed;
   }
 
-  async payout({ payee_email, amount, memo }) {
+  async payout({ payee_email, amount, memo, idempotency_key }) {
+    const batchId = idempotency_key ? `cs-${idempotency_key}` : `cs-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
     const res = await this.rest('POST', '/v1/payments/payouts', {
-      sender_batch_header: { sender_batch_id: `cs-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`, email_subject: 'Payment from Maple & Moss Candle Co.' },
+      sender_batch_header: { sender_batch_id: batchId, email_subject: 'Payment from Maple & Moss Candle Co.' },
       items: [{ recipient_type: 'EMAIL', receiver: payee_email, amount: { value: Number(amount).toFixed(2), currency: 'USD' }, note: memo || 'Supplier payment' }]
     });
     return { payout_batch_id: res.batch_header?.payout_batch_id, status: res.batch_header?.batch_status };

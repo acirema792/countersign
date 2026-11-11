@@ -4,7 +4,7 @@
 import crypto from 'node:crypto';
 import { toolkitSchemas, makePayPal } from './paypal.js';
 import { sanitizeSchema, withTimeout } from './llm.js';
-import { evaluate, commit, scanEmail, MONEY_TOOLS, MONEY_OUT_TOOLS } from './policy.js';
+import { evaluate, reserve, recordResult, scanEmail, MONEY_TOOLS } from './policy.js';
 import { findOrderByNumber, customerById, customerByEmail, vendorByEmail, round2, normEmail } from './state.js';
 
 const CUSTOM_TOOLS = [
@@ -125,28 +125,32 @@ export async function runAgent(opts) {
       // Baseline arm: nothing is sent to PayPal. We record what WOULD have executed, and
       // tell the agent it succeeded so it behaves exactly as it would unguarded.
       const fake = await mockPayPal.execute(name, args);
-      if (name === 'create_invoice') state.invoices[fake.invoice_id] = { ...(decision.money || {}), status: 'draft' };
-      const ev = emit({ type: 'proposal', tool: name, args, decision, status: 'would-execute', result: fake });
+      if (name === 'create_invoice') state.invoices[fake.invoice_id] = { ...(decision.money || {}), status: 'draft', baseline: true };
+      emit({ type: 'proposal', tool: name, args, decision, status: 'would-execute', result: fake });
       audit?.append({ run: runId, guard, tool: name, verdict: 'UNGUARDED', would: decision.verdict, money: decision.money });
-      return { status: 'COMPLETED', ...fake, mock: undefined, ev: undefined };
+      return { status: 'COMPLETED', ...fake, mock: undefined };
     }
 
     const rec = audit?.append({ run: runId, guard, tool: name, verdict: decision.verdict, rules: decision.rules.filter((r) => !r.ok).map((r) => r.id), money: decision.money });
     if (decision.verdict === 'ALLOW') {
+      // Reserve in the same tick as the verdict: a concurrent run now sees the bill paid / budget used.
+      const undo = reserve(name, decision, state, { auto: true });
       try {
-        const result = await execute(name, args, decision, state, paypal, mockPayPal);
-        commit(name, args, decision, state, result);
-        if (MONEY_OUT_TOOLS.has(name)) state.autoOutflowToday = round2(state.autoOutflowToday + (decision.money?.amount || 0));
+        const result = await execute(name, decision, state, paypal, mockPayPal, { runId });
+        recordResult(name, decision, state, result);
         emit({ type: 'proposal', tool: name, args, decision, status: 'executed', result, receipt: rec?.hash });
         audit?.append({ run: runId, event: 'executed', tool: name, result: summarizeResult(result) });
         return { status: 'COMPLETED', ...stripRaw(result) };
       } catch (e) {
-        emit({ type: 'proposal', tool: name, args, decision, status: 'error', error: e.message, receipt: rec?.hash });
+        const unknown = /timed out/i.test(e.message);
+        if (!unknown) undo(); // definitive failure: release the reservation
+        emit({ type: 'proposal', tool: name, args, decision, status: 'error', error: unknown ? `${e.message}. Outcome unknown: kept as reserved so it cannot be retried automatically.` : e.message, receipt: rec?.hash });
+        audit?.append({ run: runId, event: unknown ? 'outcome-unknown' : 'failed', tool: name });
         return { status: 'FAILED', error: e.message };
       }
     }
     if (decision.verdict === 'HOLD') {
-      const ap = { id: crypto.randomUUID().slice(0, 8), runId, label: opts.label, tool: name, args, decision, email: { from: email.from, subject: email.subject }, created: Date.now(), status: 'pending' };
+      const ap = { id: crypto.randomUUID().slice(0, 8), runId, label: opts.label, tool: name, args, decision, email: { from: email.from, subject: email.subject, body: email.body, hidden: email.hidden, auth: email.auth }, created: Date.now(), status: 'pending' };
       approvals.push(ap);
       emit({ type: 'proposal', tool: name, args, decision, status: 'held', approval_id: ap.id, receipt: rec?.hash });
       const why = decision.rules.filter((r) => !r.ok).map((r) => r.msg).join(' ');
@@ -161,16 +165,22 @@ export async function runAgent(opts) {
   return { runId, events, final, models: [...models], tokens, scan };
 }
 
-export async function execute(name, args, decision, state, paypal, mockPayPal) {
-  // Refunds against an order whose sandbox capture could not be seeded fall back to mock, labelled as such.
+// Execute exactly the payload the policy built (decision.exec), never the model's raw arguments.
+export async function execute(name, decision, state, paypal, mockPayPal, { runId = '', approvalId = '' } = {}) {
+  const exec = decision.exec;
+  if (!exec) throw new Error(`No approved payload for ${name}`);
   if (name === 'create_refund') {
+    // Refunds against an order whose sandbox capture could not be seeded fall back to mock, labelled as such.
     const o = findOrderByNumber(state, decision.money?.order_number);
     const p = o && o.paypal.mode === 'sandbox' ? paypal : mockPayPal;
-    const a = { ...args };
-    if (!a.amount) a.amount = { currency_code: 'USD', value: decision.money.amount.toFixed(2) };
-    return { ...(await withTimeout(p.execute(name, a), 30_000, `PayPal ${name}`)), via: p.mode };
+    return { ...(await withTimeout(p.execute(name, exec), 30_000, `PayPal ${name}`)), via: p.mode };
   }
-  return { ...(await withTimeout(paypal.execute(name, args), 30_000, `PayPal ${name}`)), via: paypal.mode };
+  if (name === 'pay_vendor') {
+    // Deterministic batch id: PayPal rejects a second payout with the same sender_batch_id.
+    const key = crypto.createHash('sha256').update([state.id, exec.bill_id || approvalId || runId, exec.payee_email, exec.amount].join('|')).digest('hex').slice(0, 30);
+    return { ...(await withTimeout(paypal.execute(name, { ...exec, idempotency_key: key }), 30_000, `PayPal ${name}`)), via: paypal.mode };
+  }
+  return { ...(await withTimeout(paypal.execute(name, exec), 30_000, `PayPal ${name}`)), via: paypal.mode };
 }
 
 function stripRaw(r) { const { raw, ...rest } = r || {}; return rest; }

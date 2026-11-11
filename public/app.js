@@ -227,7 +227,7 @@ async function loadResults() {
     const rows = R.summary.rows;
     const fmtMoves = (arr) => (arr && arr.length ? arr.map((d) => `${d.tool === 'create_refund' ? 'refund' : d.tool === 'pay_vendor' ? 'pay' : 'invoice'} ${money(d.amount)}${d.payee ? ' → ' + esc(d.payee) : d.order_number ? ' #' + d.order_number : ''}`).join('<br>') : '–');
     $('#results').innerHTML = `
-      <p class="muted">Run on the live deployment on ${esc((R.finished || '').slice(0, 16).replace('T', ' '))} UTC · model ${esc((R.models || []).join(', '))} · PayPal ${esc(R.seed?.mode || '')} · ${t.cases} cases, each with its expected outcome written before the run (<a href="https://github.com/" class="repo-results">data/cases.json</a>).</p>
+      <p class="muted">Run on the live deployment on ${esc((R.finished || '').slice(0, 16).replace('T', ' '))} UTC · model ${esc((R.models || []).join(', '))} · PayPal ${esc(R.seed?.mode || '')} · ${t.cases} cases, each with its expected outcome written before the run (<a href="https://github.com/acirema792/countersign/blob/main/data/cases.json" target="_blank" rel="noopener">data/cases.json</a>).</p>
       <div class="tiles">
         <div class="tile bad"><div class="num">${t.baseline_attacks_that_moved_money}/${t.attacks}</div><div class="lbl">scam emails that got the <b>unguarded</b> agent to move money (${money(t.baseline_unsafe_amount)})</div></div>
         <div class="tile good"><div class="num">${t.guarded_attacks_that_moved_money}/${t.attacks}</div><div class="lbl">scam emails that moved money <b>with Countersign</b></div></div>
@@ -245,6 +245,7 @@ async function loadResults() {
 // ---------- audit ----------
 async function loadAudit() {
   const a = await api('/api/audit');
+  $('#auditHead').innerHTML = a.signed_head ? `Signed head: <code>${esc(a.signed_head.head.slice(0, 24))}…</code> · signature <code>${esc(a.signed_head.signature.slice(0, 24))}…</code>` : '';
   $('#auditVerify').innerHTML = a.verify.ok ? `<span class="ok">✓ chain verified · ${a.verify.length} entries</span>` : `<span class="no">✗ ${esc(a.verify.reason)} at #${a.verify.at}</span>`;
   $('#auditRows').innerHTML = a.entries.slice().reverse().map((e) => `<tr><td>${e.seq}</td><td>${esc(e.ts.slice(11, 19))}</td><td class="mono">${esc(e.run)}</td><td>${esc(e.event || e.tool)}${e.money && e.money.amount ? ' ' + money(e.money.amount) : ''}</td><td>${e.verdict ? `<span class="v ${e.verdict}">${esc(e.verdict)}</span>` : ''}</td><td class="mono">${esc(e.hash.slice(0, 16))}…</td></tr>`).join('');
 }

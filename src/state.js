@@ -1,6 +1,7 @@
 // Business state ("the books") for one run or one demo session.
 // Everything in here is TRUSTED: it comes from the owner's own records or from PayPal.
 import fs from 'node:fs';
+import crypto from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -20,7 +21,9 @@ export const sameMoney = (a, b) => Math.abs(Number(a) - Number(b)) < 0.005;
 export const normEmail = (s) => String(s || '').trim().toLowerCase();
 
 // Build a fresh, mutable copy of the books. `captures` maps order_number -> PayPal capture info.
-export function createState(world, captures = {}) {
+export function newLedger() { return { day: new Date().toISOString().slice(0, 10), autoOutflow: 0 }; }
+
+export function createState(world, captures = {}, ledger = newLedger()) {
   const w = structuredClone(world);
   for (const o of w.orders) {
     const c = captures[o.order_number] || {};
@@ -33,8 +36,9 @@ export function createState(world, captures = {}) {
     o.refunded = 0;
   }
   return {
+    id: crypto.randomUUID(),
     world: w,
-    autoOutflowToday: 0,
+    ledger, // automatic outflows today; shared by every demo session that uses the same PayPal account
     invoices: {}, // invoice_id -> { recipient, amount, items, status }
     paidBills: [],
     log: []
@@ -68,11 +72,16 @@ const keyTokens = (s) => String(s).toLowerCase().replace(/[^a-z0-9 ]/g, ' ').spl
 export function catalogItem(state, nameOrSku) {
   const q = String(nameOrSku || '').toLowerCase();
   if (!q) return null;
-  const bySku = state.world.catalog.find((c) => q.includes(c.sku.toLowerCase()));
-  if (bySku) return bySku;
+  const bySku = state.world.catalog.find((c) => q === c.sku.toLowerCase() || q.includes(`[${c.sku.toLowerCase()}]`) || q.split(/[^a-z0-9-]+/).includes(c.sku.toLowerCase()));
   const qt = new Set(keyTokens(q));
+  const byName = catalogByName(state, qt);
+  if (bySku && byName && bySku !== byName) return null; // name says one product, SKU another: ambiguous
+  return byName || bySku || null;
+}
+
+function catalogByName(state, qt) {
   // Every distinctive word of the product name (before the size) must appear in the query.
-  const tokensOf = (c) => keyTokens(c.name.split(',')[0]);
+  const tokensOf = (c) => keyTokens(c.name.split(',')[0]).filter((w) => !/^[a-z]+-\d+$/.test(w));
   const all = state.world.catalog.filter((c) => tokensOf(c).every((w) => qt.has(w)));
   if (all.length === 1) return all[0];
   // Fallback: exactly one product shares a distinctive word with the query ("Fig", "Pine candle").

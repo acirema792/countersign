@@ -3,11 +3,11 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { loadWorld, loadCases, createState, DATA_DIR, round2 } from './src/state.js';
+import { loadWorld, loadCases, createState, newLedger, DATA_DIR, round2 } from './src/state.js';
 import { makePayPal, seedCaptures } from './src/paypal.js';
 import { makeLLM } from './src/llm.js';
 import { runAgent, execute } from './src/agent.js';
-import { evaluate, commit, scanEmail, MONEY_OUT_TOOLS } from './src/policy.js';
+import { evaluate, reserve, recordResult, scanEmail } from './src/policy.js';
 import { AuditLog, verifyChain } from './src/audit.js';
 import { runCase, summarize } from './src/eval.js';
 
@@ -22,8 +22,16 @@ const cases = loadCases();
 const paypal = makePayPal();
 const mockPayPal = makePayPal({ PAYPAL_MODE: 'mock' });
 const llm = makeLLM();
-const audit = new AuditLog();
+const audit = new AuditLog({ signingKeyPem: process.env.AUDIT_SIGNING_KEY });
 const RECORDED_DIR = path.join(DATA_DIR, 'recorded');
+
+// One automatic-outflow budget per PayPal account per day, shared by every demo session.
+let accountLedger = newLedger();
+function ledgerForToday() {
+  const day = new Date().toISOString().slice(0, 10);
+  if (accountLedger.day !== day) { accountLedger.day = day; accountLedger.autoOutflow = 0; }
+  return accountLedger;
+}
 
 // ---------- sessions (one per browser) ----------
 const sessions = new Map();
@@ -53,11 +61,12 @@ async function getSession(req) {
   let s = sessions.get(id);
   if (!s) {
     const seeded = await freshCaptures();
-    s = { id, state: createState(world, seeded.captures), approvals: [], runs: [], seedErrors: seeded.errors, created: Date.now() };
+    s = { id, state: createState(world, seeded.captures, ledgerForToday()), approvals: [], runs: [], seedErrors: seeded.errors, created: Date.now() };
     sessions.set(id, s);
     if (sessions.size > 300) sessions.delete(sessions.keys().next().value);
   }
   s.touched = Date.now();
+  ledgerForToday();
   return s;
 }
 
@@ -72,7 +81,7 @@ function allowLive(ip) {
   if (dayHits.day !== day) dayHits = { day, n: 0 };
   const now = Date.now();
   const hits = (ipHits.get(ip) || []).filter((t) => now - t < 3600_000);
-  if (hits.length >= 20 || dayHits.n >= Number(process.env.DAILY_LIVE_RUNS || 150)) return false;
+  if (hits.length >= Number(process.env.RUNS_PER_IP_HOUR || 12) || dayHits.n >= Number(process.env.DAILY_LIVE_RUNS || 150)) return false;
   hits.push(now); ipHits.set(ip, hits); dayHits.n++;
   return true;
 }
@@ -92,7 +101,7 @@ function sessionView(s) {
     vendors: st.world.vendors,
     bills: st.world.open_bills,
     invoices: st.invoices,
-    auto_outflow_today: st.autoOutflowToday,
+    auto_outflow_today: st.ledger.autoOutflow,
     approvals: s.approvals.slice().reverse(),
     runs: s.runs.slice(-30).reverse().map((id) => { const r = runs.get(id); return r && { id, label: r.label, title: r.title, status: r.status, guard: r.guard, source: r.source }; }).filter(Boolean),
     seed_errors: s.seedErrors
@@ -101,6 +110,7 @@ function sessionView(s) {
 
 // ---------- app ----------
 const app = express();
+app.set('trust proxy', 1); // Render terminates TLS in front of us: rate-limit by the real client IP
 app.use(express.json({ limit: '100kb' }));
 app.use(express.static(path.join(here, 'public'), { setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache') }));
 
@@ -128,7 +138,7 @@ app.post('/api/run', async (req, res, next) => {
       if (!c) return res.status(404).json({ error: `Unknown case ${case_id}` });
       email = c.email; title = c.title; label = c.id;
     } else if (custom && (custom.body || custom.subject)) {
-      email = { from: String(custom.from || 'Unknown Sender <unknown@example.com>').slice(0, 200), subject: String(custom.subject || '(no subject)').slice(0, 200), body: String(custom.body || '').slice(0, 4000), hidden: custom.hidden ? String(custom.hidden).slice(0, 2000) : undefined };
+      email = { from: String(custom.from || 'Unknown Sender <unknown@example.com>').slice(0, 200), subject: String(custom.subject || '(no subject)').slice(0, 200), body: String(custom.body || '').slice(0, 4000), hidden: custom.hidden ? String(custom.hidden).slice(0, 2000) : undefined, auth: 'none' };
       title = email.subject; label = 'custom';
     } else {
       return res.status(400).json({ error: 'Pick an email from the inbox, or paste one with at least a subject or body.' });
@@ -197,18 +207,29 @@ app.post('/api/approvals/:id/:action(approve|reject)', async (req, res, next) =>
       return res.json(ap);
     }
     // Re-check against the books as they are NOW; hard blocks cannot be countersigned.
-    const now = evaluate(ap.tool, ap.args, { state: s.state, email: { ...ap.email, body: '' }, scan: { suspicious: false, findings: [] } });
+    const now = evaluate(ap.tool, ap.args, { state: s.state, email: ap.email, scan: scanEmail(ap.email) });
     const hard = now.rules.filter((r) => !r.ok && r.verdict === 'BLOCK');
     if (hard.length) return res.status(409).json({ error: `Cannot countersign: ${hard.map((r) => r.msg).join(' ')}` });
-    const result = await execute(ap.tool, ap.args, now, s.state, paypal, mockPayPal);
-    commit(ap.tool, ap.args, now, s.state, result);
-    ap.status = 'approved'; ap.decided = Date.now(); ap.result = result;
-    audit.append({ run: ap.runId, event: 'owner-countersigned', tool: ap.tool, approval: ap.id, result: { id: result.refund_id || result.payout_batch_id || result.invoice_id, via: result.via } });
+    // Claim the approval and reserve in the books in the same tick: a double click cannot pay twice.
+    ap.status = 'executing';
+    const undo = reserve(ap.tool, now, s.state, { auto: false });
+    try {
+      const result = await execute(ap.tool, now, s.state, paypal, mockPayPal, { runId: ap.runId, approvalId: ap.id });
+      recordResult(ap.tool, now, s.state, result);
+      ap.status = 'approved'; ap.decided = Date.now(); ap.result = result;
+      audit.append({ run: ap.runId, event: 'owner-countersigned', tool: ap.tool, approval: ap.id, result: { id: result.refund_id || result.payout_batch_id || result.invoice_id, via: result.via } });
+    } catch (e) {
+      const unknown = /timed out/i.test(e.message);
+      if (!unknown) { undo(); ap.status = 'pending'; } else ap.status = 'unknown';
+      return res.status(502).json({ error: `PayPal: ${e.message}` });
+    }
     res.json(ap);
   } catch (e) { next(e); }
 });
 
-app.get('/api/audit', (req, res) => res.json({ entries: audit.tail(300), verify: verifyChain(audit.entries) }));
+app.get('/api/audit', (req, res) => res.json({ entries: audit.tail(300), verify: verifyChain(audit.entries), signed_head: audit.signedHead() }));
+app.get('/api/audit/pubkey', (req, res) => res.type('text/plain').send(audit.publicKeyPem));
+app.get('/api/audit/export', (req, res) => res.json({ entries: audit.entries, signed_head: audit.signedHead(), public_key: audit.publicKeyPem }));
 app.get('/api/audit/verify', (req, res) => res.json(verifyChain(audit.entries)));
 
 // ---------- admin self-test of each PayPal capability ----------
@@ -258,6 +279,41 @@ app.post('/api/eval/start', async (req, res) => {
     latestEval = job;
   } catch (e) { job.status = 'error'; job.error = String(e.stack || e); }
 });
+// Publish an evaluation's files straight to the GitHub repo as one commit (so results never
+// pass through a person's clipboard). Needs GITHUB_TOKEN (contents:write on GITHUB_REPO).
+app.post('/api/eval/:id/publish', async (req, res) => {
+  if (!ADMIN_TOKEN || req.get('x-admin-token') !== ADMIN_TOKEN) return res.status(403).json({ error: 'admin token required' });
+  const job = req.params.id === 'latest' ? latestEval : evals.get(req.params.id);
+  if (!job || job.status !== 'done') return res.status(404).json({ error: 'no finished eval with that id' });
+  const repo = process.env.GITHUB_REPO || 'acirema792/countersign';
+  const tok = process.env.GITHUB_TOKEN;
+  if (!tok) return res.status(400).json({ error: 'GITHUB_TOKEN not set' });
+  try {
+    const { buildReport } = await import('./src/report.js');
+    const { files } = buildReport(job, cases);
+    const extra = req.body && typeof req.body.extra === 'object' ? req.body.extra : {};
+    for (const [k, v] of Object.entries(extra)) if (/^eval_results\/[\w.-]+\.json$/.test(k) && typeof v === 'string') files[k] = v;
+    const gh = async (method, p, body) => {
+      const r = await fetch(`https://api.github.com/repos/${repo}${p}`, { method, headers: { Authorization: `Bearer ${tok}`, Accept: 'application/vnd.github+json', 'Content-Type': 'application/json', 'User-Agent': 'countersign' }, body: body ? JSON.stringify(body) : undefined });
+      const j = await r.json();
+      if (!r.ok) throw new Error(`GitHub ${method} ${p}: ${r.status} ${j.message}`);
+      return j;
+    };
+    const ref = await gh('GET', '/git/ref/heads/main');
+    const head = await gh('GET', `/git/commits/${ref.object.sha}`);
+    const tree = [];
+    for (const [p, content] of Object.entries(files)) {
+      const blob = await gh('POST', '/git/blobs', { content, encoding: 'utf-8' });
+      tree.push({ path: p, mode: '100644', type: 'blob', sha: blob.sha });
+    }
+    const t = await gh('POST', '/git/trees', { base_tree: head.tree.sha, tree });
+    const msg = `Benchmark results ${job.id} (run on the live deployment)\n\n${JSON.stringify(job.summary.totals)}`;
+    const c = await gh('POST', '/git/commits', { message: msg, tree: t.sha, parents: [ref.object.sha] });
+    await gh('PATCH', '/git/refs/heads/main', { sha: c.sha });
+    res.json({ ok: true, commit: c.sha, files: Object.keys(files).length });
+  } catch (e) { res.status(502).json({ error: String(e.message).slice(0, 300) }); }
+});
+
 app.get('/api/eval/:id', (req, res) => {
   const j = req.params.id === 'latest' ? latestEval : evals.get(req.params.id);
   if (!j) return res.status(404).json({ error: 'no eval' });
