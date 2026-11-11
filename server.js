@@ -314,6 +314,25 @@ app.post('/api/eval/:id/publish', async (req, res) => {
   } catch (e) { res.status(502).json({ error: String(e.message).slice(0, 300) }); }
 });
 
+// Read-only report files for a finished evaluation, readable cross-origin from github.com so a
+// maintainer can commit them from a GitHub tab. Also accepts a stashed earlier-run summary.
+const stash = {};
+app.post('/api/admin/stash', (req, res) => {
+  if (!ADMIN_TOKEN || req.get('x-admin-token') !== ADMIN_TOKEN) return res.status(403).json({ error: 'admin token required' });
+  const { name, content } = req.body || {};
+  if (!/^[\w.-]+\.json$/.test(String(name)) || typeof content !== 'string' || content.length > 60_000) return res.status(400).json({ error: 'bad stash' });
+  stash[`eval_results/${name}`] = content;
+  res.json({ ok: true, files: Object.keys(stash) });
+});
+app.get('/api/eval/:id/report', async (req, res) => {
+  if (req.get('origin') === 'https://github.com') res.set('Access-Control-Allow-Origin', 'https://github.com');
+  const job = req.params.id === 'latest' ? latestEval : evals.get(req.params.id);
+  if (!job || job.status !== 'done') return res.status(404).json({ error: 'no finished eval with that id' });
+  const { buildReport } = await import('./src/report.js');
+  const { files, totals } = buildReport(job, cases);
+  res.json({ id: job.id, totals, files: { ...files, ...stash } });
+});
+
 app.get('/api/eval/:id', (req, res) => {
   const j = req.params.id === 'latest' ? latestEval : evals.get(req.params.id);
   if (!j) return res.status(404).json({ error: 'no eval' });
