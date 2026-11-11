@@ -14,7 +14,7 @@ Every public claim about Countersign, with how you can check it.
 | 4 | Routine work still completes automatically: 5/5 routine cases, 2/2 look-alike cases as expected | VERIFIED-LIVE | same bundle |
 | 5 | Expected outcomes were written before the run | REPRODUCIBLE | `data/cases.json` git history: committed before the first `eval_results/` commit |
 | 6 | The agent's PayPal tools come from PayPal's official Agent Toolkit | REPRODUCIBLE | `src/paypal.js` imports `PayPalAgentToolkit` from `@paypal/agent-toolkit/openai`; `test/guard.test.js` asserts the tool list |
-| 7 | Invoices are created and sent in the real PayPal sandbox | VERIFIED-LIVE | run "Restock - 12 Cedar & Smoke": the card shows a real `INV2-…` invoice ID |
+| 7 | Invoices go to PayPal's Invoicing API through the toolkit | REPRODUCIBLE, not live in the published run | During the run the sandbox app answered 403 for Invoicing (permission just enabled), so invoices were simulated and labelled. The same call goes live once PayPal accepts. |
 | 8 | Supplier payments go through PayPal Payouts in the real sandbox | VERIFIED-LIVE | run "Invoice NW-2207": the card shows a real `payout_batch_id` |
 | 9 | Refunds go to PayPal via the toolkit's `create_refund` | REPRODUCIBLE, not live today | Same code path; the demo sandbox account currently refuses card captures, so live refunds run against **simulated** captures and are labelled "Simulated" in the UI |
 | 10 | Only the owner can countersign | VERIFIED-LIVE | approve with a wrong PIN → HTTP 403; `server.js` approval route; hard BLOCK rules re-checked at approval time |
