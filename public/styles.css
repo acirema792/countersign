@@ -133,3 +133,9 @@ dialog .row { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10
 
 @media (max-width: 1150px) { .grid { grid-template-columns: 260px 1fr; } .owner { grid-column: 1 / -1; } .tiles { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 760px) { .grid, .cols2 { grid-template-columns: 1fr; } .tag { display: none; } main { padding: 12px; } }
+
+.pre { white-space: pre-wrap; }
+.apmsg:empty { display: none; }
+.apmsg { font-size: 12.5px; padding: 8px 10px; border-radius: 8px; margin-bottom: 8px; }
+.apmsg.no { background: var(--blockbg); color: var(--block); font-weight: 600; }
+.apmsg.ok { background: var(--allowbg); color: var(--allow); font-weight: 600; }

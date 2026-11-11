@@ -1,5 +1,6 @@
 // Countersign UI (no framework). Talks to the JSON API in server.js.
 const $ = (s, el = document) => el.querySelector(s);
+const unescapeNl = (s) => String(s ?? '').replace(/\\n/g, '\n');
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const money = (n) => '$' + Number(n || 0).toFixed(2);
 
@@ -128,11 +129,11 @@ function renderEvent(e) {
   if (e.type === 'start') {
     return e.scan && e.scan.suspicious ? `<div class="ev small" style="border-left:3px solid var(--block)">Untrusted-content scanner: <b>${e.scan.findings.map((f) => esc(f.kind)).join(', ')}</b>. Any money action from this email will need the owner.</div>` : '';
   }
-  if (e.type === 'model') return `<div class="ev model"><span class="small muted">Agent (${esc(e.model)})</span><div>${esc(e.text)}</div></div>`;
+  if (e.type === 'model') return `<div class="ev model"><span class="small muted">Agent (${esc(e.model)})</span><div class="pre">${esc(unescapeNl(e.text))}</div></div>`;
   if (e.type === 'lookup') return `<div class="ev lookup">🔎 <span class="k">${esc(e.tool)}</span>(${esc(JSON.stringify(e.args))})${e.error ? ` → <span class="no">${esc(e.error)}</span>` : e.result && e.result.found === false ? ' → not found' : ''}</div>`;
-  if (e.type === 'reply') return `<div class="ev reply"><span class="small muted">Reply drafted to sender</span><div>${esc(e.text)}</div></div>`;
+  if (e.type === 'reply') return `<div class="ev reply"><span class="small muted">Reply drafted to sender</span><div class="pre">${esc(unescapeNl(e.text))}</div></div>`;
   if (e.type === 'escalate') return `<div class="ev reply"><span class="small muted">Agent flagged for owner</span><div>${esc(e.reason)}</div></div>`;
-  if (e.type === 'end') return e.final ? `<div class="ev model"><span class="small muted">Agent's summary for the owner</span><div>${esc(e.final)}</div></div>` : '';
+  if (e.type === 'end') return e.final ? `<div class="ev model"><span class="small muted">Agent's summary for the owner</span><div class="pre">${esc(unescapeNl(e.final))}</div></div>` : '';
   if (e.type !== 'proposal') return '';
 
   const d = e.decision || { verdict: 'BLOCK', rules: [] };
@@ -197,11 +198,14 @@ async function loadSession() {
 
 async function decide(id, act, btn) {
   btn.disabled = true;
-  try { await api(`/api/approvals/${id}/${act}`, { method: 'POST', body: JSON.stringify({ pin: $('#pin').value }) }); }
-  catch (e) { alertInline(e.message); }
-  loadSession();
+  $('#apMsg').className = 'apmsg'; $('#apMsg').textContent = '';
+  try {
+    const r = await api(`/api/approvals/${id}/${act}`, { method: 'POST', body: JSON.stringify({ pin: $('#pin').value }) });
+    showApMsg(act === 'approve' ? `Countersigned. ${r.result && r.result.via === 'sandbox' ? 'Sent to the PayPal sandbox' : 'Executed'}: ${r.result ? (r.result.refund_id || r.result.payout_batch_id || r.result.invoice_id || '') : ''}` : 'Rejected. Nothing was sent to PayPal.', 'ok');
+  } catch (e) { showApMsg(e.message, 'no'); }
+  await loadSession();
 }
-function alertInline(msg) { $('#approvals').insertAdjacentHTML('afterbegin', `<li class="ap" style="border-color:var(--block)">${esc(msg)}</li>`); }
+function showApMsg(msg, kind) { const el = $('#apMsg'); el.className = `apmsg ${kind}`; el.textContent = msg; }
 
 $('#resetBtn').onclick = async () => { await api('/api/session/reset', { method: 'POST' }); loadSession(); };
 
@@ -260,4 +264,5 @@ document.querySelectorAll('[data-pick]').forEach((a) => a.addEventListener('clic
   const m = location.hash.match(/case=([A-Z0-9]+)/);
   pick(m ? m[1] : 'A6');
   if (location.hash.includes('results')) showTab('results');
+  window.addEventListener('hashchange', () => { const h = location.hash.match(/case=([A-Z0-9]+)/); if (h && (!current || current.id !== h[1])) { showTab('demo'); pick(h[1]); } });
 })();
