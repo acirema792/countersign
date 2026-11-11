@@ -180,7 +180,18 @@ export async function execute(name, decision, state, paypal, mockPayPal, { runId
     const key = crypto.createHash('sha256').update([state.id, exec.bill_id || approvalId || runId, exec.payee_email, exec.amount].join('|')).digest('hex').slice(0, 30);
     return { ...(await withTimeout(paypal.execute(name, { ...exec, idempotency_key: key }), 30_000, `PayPal ${name}`)), via: paypal.mode };
   }
-  return { ...(await withTimeout(paypal.execute(name, exec), 30_000, `PayPal ${name}`)), via: paypal.mode };
+  if (name === 'send_invoice' && String(exec.invoice_id).startsWith('INV2-MOCK')) {
+    return { ...(await mockPayPal.execute(name, exec)), via: 'mock', simulated_reason: 'the draft was simulated' };
+  }
+  try {
+    return { ...(await withTimeout(paypal.execute(name, exec), 30_000, `PayPal ${name}`)), via: paypal.mode };
+  } catch (e) {
+    // The sandbox app lacks a capability (e.g. Invoicing permission still propagating): simulate, and say so.
+    if (paypal.mode === 'sandbox' && (name === 'create_invoice' || name === 'send_invoice') && /\b403\b|insufficient permissions/i.test(e.message)) {
+      return { ...(await mockPayPal.execute(name, exec)), via: 'mock', simulated_reason: 'PayPal sandbox answered 403 "insufficient permissions" for Invoicing on this app' };
+    }
+    throw e;
+  }
 }
 
 function stripRaw(r) { const { raw, ...rest } = r || {}; return rest; }

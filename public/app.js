@@ -147,7 +147,7 @@ function renderEvent(e) {
 
   const rules = (d.rules || []).map((r) => `<li class="${r.ok ? 'good' : 'bad'}"><span>${r.ok ? '✓' : r.verdict === 'BLOCK' ? '⛔' : '✋'}</span><span>${esc(r.msg)} <span class="rid">${esc(r.id)}</span></span></li>`).join('');
   const prov = (d.provenance || []).map((p) => `<span class="${esc(p.source)}">${esc(p.field)}: <b>${esc(typeof p.value === 'number' ? money(p.value) : p.value)}</b> ← ${p.source === 'books' ? 'books' : p.source === 'email-only' ? 'email only' : 'unknown'}${p.note ? ' · ' + esc(p.note) : ''}</span>`).join('');
-  const via = e.result && e.result.via === 'sandbox' ? 'PayPal sandbox' : e.result && e.result.via === 'mock' ? 'Simulated (no sandbox card capture available)' : 'PayPal';
+  const via = e.result && e.result.via === 'sandbox' ? 'PayPal sandbox' : e.result && e.result.via === 'mock' ? `Simulated (${e.result.simulated_reason || 'no sandbox card capture available'})` : 'PayPal';
   const res = e.result ? `<div class="result">${e.status === 'executed' ? `${via}: ` : 'Recorded only: '}${esc(Object.entries(e.result).filter(([k, v]) => typeof v !== 'object' && k !== 'mock' && k !== 'via').map(([k, v]) => `${k}=${v}`).join(' · '))}</div>` : '';
   const errMsg = e.error ? `<div class="result">${esc(e.error)}</div>` : '';
   const would = unguarded ? `<div class="small" style="margin-top:6px">Countersign would have said: <span class="v ${d.verdict}">${d.verdict}</span></div>` : '';
