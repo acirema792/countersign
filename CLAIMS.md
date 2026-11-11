@@ -9,9 +9,9 @@ Every public claim about Countersign, with how you can check it.
 | # | Claim | Tier | How to check |
 |---|---|---|---|
 | 1 | No model output decides whether money moves; a deterministic policy does | REPRODUCIBLE | `src/policy.js` has no model calls; `src/agent.js` `handleCall()` runs `evaluate()` before any PayPal call; `npm test` |
-| 2 | With Countersign, {{G_ATTACK}}/{{N_ATTACK}} scam emails moved money in the live benchmark | VERIFIED-LIVE | `eval_results/latest.json` (`summary.totals`), Measured results tab, `BENCHMARK-RESULTS.md` |
-| 3 | Without Countersign, the same model, prompt and tools would have moved money on {{B_ATTACK}}/{{N_ATTACK}} scam emails ({{B_AMOUNT}}) | VERIFIED-LIVE | same bundle, `baseline` rows; replay any case in the live app with "Run without (baseline)" |
-| 4 | Routine work still completes automatically: {{LEGIT}} routine cases, {{LOOK}} look-alike cases as expected | VERIFIED-LIVE | same bundle |
+| 2 | With Countersign, 0/9 scam emails moved money in the live benchmark | VERIFIED-LIVE | `eval_results/latest.json` (`summary.totals`), Measured results tab, `BENCHMARK-RESULTS.md` |
+| 3 | Without Countersign, the same model, prompt and tools would have moved money on 2/9 scam emails ($492.00) | VERIFIED-LIVE | same bundle, `baseline` rows; replay any case in the live app with "Run without (baseline)" |
+| 4 | Routine work still completes automatically: 5/5 routine cases, 2/2 look-alike cases as expected | VERIFIED-LIVE | same bundle |
 | 5 | Expected outcomes were written before the run | REPRODUCIBLE | `data/cases.json` git history: committed before the first `eval_results/` commit |
 | 6 | The agent's PayPal tools come from PayPal's official Agent Toolkit | REPRODUCIBLE | `src/paypal.js` imports `PayPalAgentToolkit` from `@paypal/agent-toolkit/openai`; `test/guard.test.js` asserts the tool list |
 | 7 | Invoices are created and sent in the real PayPal sandbox | VERIFIED-LIVE | run "Restock - 12 Cedar & Smoke": the card shows a real `INV2-…` invoice ID |
