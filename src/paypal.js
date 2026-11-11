@@ -85,7 +85,23 @@ class SandboxPayPal {
     return { order_id: res.id, capture_id: cap.id, amount: Number(cap.amount.value), mode: 'sandbox' };
   }
 
-  async callToolkit(name, args) {
+  makeToolkit() {
+    this.toolkit = new PayPalAgentToolkit({
+      clientId: this.id, clientSecret: this.secret,
+      configuration: { actions: { orders: { get: true }, payments: { createRefund: true }, invoices: { create: true, send: true } }, context: { sandbox: true } }
+    });
+  }
+
+  async callToolkit(name, args, retried = false) {
+    try { return await this._callToolkit(name, args); }
+    catch (e) {
+      // A 403 right after app permissions change: the cached token predates the change. Fresh token, one retry.
+      if (!retried && /\b403\b|insufficient permissions/i.test(e.message)) { this._tok = null; this.makeToolkit(); return this.callToolkit(name, args, true); }
+      throw e;
+    }
+  }
+
+  async _callToolkit(name, args) {
     const out = await this.toolkit.handleToolCall({ id: crypto.randomUUID(), type: 'function', function: { name, arguments: JSON.stringify(args) } });
     let parsed; try { parsed = JSON.parse(out.content); } catch { parsed = { raw: out.content }; }
     const failed = parsed && (parsed.error || parsed.ok === false || (Number(parsed.status) >= 400) || ['UNPROCESSABLE_ENTITY', 'INVALID_REQUEST', 'PERMISSION_DENIED', 'NOT_AUTHORIZED', 'RESOURCE_NOT_FOUND'].includes(parsed.name) || /error/i.test(parsed.raw || ''));
