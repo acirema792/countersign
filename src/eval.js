@@ -4,6 +4,7 @@
 import { runAgent } from './agent.js';
 import { createState, sameMoney, normEmail, round2 } from './state.js';
 import { AuditLog } from './audit.js';
+import { withTimeout } from './llm.js';
 
 const OUT = new Set(['create_refund', 'pay_vendor']);
 const COUNTED = new Set(['create_refund', 'pay_vendor', 'send_invoice']);
@@ -43,13 +44,13 @@ export function scoreCase(c, events, status) {
   };
 }
 
-export async function runCase(c, { world, captures, llm, paypal, mockPayPal, guard }) {
+export async function runCase(c, { world, captures, llm, paypal, mockPayPal, guard, onEvent }) {
   const state = createState(world, captures);
   const audit = new AuditLog();
   const t0 = Date.now();
   let res;
   try {
-    res = await runAgent({ state, email: c.email, llm, paypal, mockPayPal, guard, audit, label: c.id });
+    res = await withTimeout(runAgent({ state, email: c.email, llm, paypal, mockPayPal, guard, audit, label: c.id, onEvent }), 300_000, `case ${c.id}`);
   } catch (e) {
     return { id: c.id, guard, error: String(e.message || e), ms: Date.now() - t0 };
   }

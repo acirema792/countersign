@@ -3,7 +3,7 @@
 // difference is guard: 'enforce' (Countersign on) vs 'off' (baseline, nothing executed).
 import crypto from 'node:crypto';
 import { toolkitSchemas, makePayPal } from './paypal.js';
-import { sanitizeSchema } from './llm.js';
+import { sanitizeSchema, withTimeout } from './llm.js';
 import { evaluate, commit, scanEmail, MONEY_TOOLS, MONEY_OUT_TOOLS } from './policy.js';
 import { findOrderByNumber, customerById, customerByEmail, vendorByEmail, round2, normEmail } from './state.js';
 
@@ -113,7 +113,7 @@ export async function runAgent(opts) {
     if (name === 'escalate_to_owner') { emit({ type: 'escalate', reason: args.reason }); return { flagged: true }; }
 
     if (name === 'get_order') {
-      try { const r = await paypal.execute('get_order', args); emit({ type: 'lookup', tool: name, args, result: { id: r.id, status: r.status } }); return r; }
+      try { const r = await withTimeout(paypal.execute('get_order', args), 30_000, 'PayPal get_order'); emit({ type: 'lookup', tool: name, args, result: { id: r.id, status: r.status } }); return r; }
       catch (e) { emit({ type: 'lookup', tool: name, args, error: e.message }); return { error: e.message }; }
     }
 
@@ -168,9 +168,9 @@ export async function execute(name, args, decision, state, paypal, mockPayPal) {
     const p = o && o.paypal.mode === 'sandbox' ? paypal : mockPayPal;
     const a = { ...args };
     if (!a.amount) a.amount = { currency_code: 'USD', value: decision.money.amount.toFixed(2) };
-    return { ...(await p.execute(name, a)), via: p.mode };
+    return { ...(await withTimeout(p.execute(name, a), 30_000, `PayPal ${name}`)), via: p.mode };
   }
-  return { ...(await paypal.execute(name, args)), via: paypal.mode };
+  return { ...(await withTimeout(paypal.execute(name, args), 30_000, `PayPal ${name}`)), via: paypal.mode };
 }
 
 function stripRaw(r) { const { raw, ...rest } = r || {}; return rest; }

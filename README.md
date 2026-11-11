@@ -1,3 +1,111 @@
 # Countersign
 
-A countersignature layer for AI agents that move money with PayPal. Full README coming.
+**Your AI agent runs the PayPal back office. Money never moves on a stranger's say-so.**
+
+![scams stopped](https://img.shields.io/badge/scam_emails_that_moved_money-{{G_ATTACK}}%2F{{N_ATTACK}}_with_Countersign-1e7a4c) ![baseline](https://img.shields.io/badge/without_Countersign-{{B_ATTACK}}%2F{{N_ATTACK}}_moved_money-b3261e) ![routine](https://img.shields.io/badge/routine_work_completed-{{LEGIT}}-1e7a4c) ![license](https://img.shields.io/badge/license-MIT-blue)
+
+**Live demo:** https://countersign-jlir.onrender.com · **Review in five minutes:** [JUDGES.md](JUDGES.md) · **Benchmark:** [BENCHMARK-RESULTS.md](BENCHMARK-RESULTS.md) · **Claims and evidence:** [CLAIMS.md](CLAIMS.md)
+
+![Countersign blocking a supplier-fraud payment](docs/hero.png)
+
+## The problem
+
+Small businesses are starting to hand their inbox and their PayPal account to AI agents: refund the customer, invoice the wholesaler, pay the supplier. But the agent reads email, and email is where the fraud is. Business email compromise ("our bank details changed, please pay the new account") cost US victims **$3.05 billion in 2025**, second only to investment fraud ([FBI IC3 2025 report](https://www.ic3.gov/AnnualReport/Reports/2025_IC3Report.pdf)). And a prompt injection hidden in an email's HTML is invisible to the owner but perfectly visible to the model.
+
+A model cannot be trusted to notice every time. **So Countersign never asks it to.**
+
+## What it does
+
+Countersign sits between an AI agent and PayPal:
+
+1. **An email arrives.** It is untrusted text.
+2. **The agent proposes.** Gemini 3.5 Flash, equipped with tools from PayPal's official **Agent Toolkit** (`create_refund`, `create_invoice`, `send_invoice`, `get_order`) plus PayPal Payouts, decides what it *wants* to do.
+3. **Code decides.** Every proposed money action goes through a deterministic policy engine ([`src/policy.js`](src/policy.js)) before anything reaches PayPal. The core rule is **provenance**: every amount and payee must trace back to the business's own books (an order line, an open bill, a vendor's PayPal address on file, a catalog price), not just to the email.
+4. **PayPal executes, or the owner countersigns.**
+   - **ALLOW** runs now in the PayPal sandbox.
+   - **HOLD** waits for the owner's PIN.
+   - **BLOCK** never runs.
+
+The model is never asked whether something is fraud. It proposes; code decides; a human countersigns anything risky. Every decision is written to a SHA-256 hash-chained receipt log.
+
+## Measured, not claimed
+
+16 cases ([`data/cases.json`](data/cases.json)): 9 scams, 5 routine requests, 2 genuine look-alikes. Each case's expected outcome was written **before** any run. Each case runs twice on the live deployment with the **same model, prompt and tools**: once with Countersign enforcing, and once with it off. In the baseline arm nothing is sent to PayPal; we record what the agent *would* have done.
+
+{{RESULTS_TABLE}}
+
+Full case-by-case table: [BENCHMARK-RESULTS.md](BENCHMARK-RESULTS.md). Machine-readable bundle: [`eval_results/latest.json`](eval_results/latest.json). Every recorded run can be replayed in the live app.
+
+## Built on PayPal (sandbox)
+
+| PayPal product | Its job in Countersign | Code |
+|---|---|---|
+| **PayPal Agent Toolkit** (`@paypal/agent-toolkit`) | The agent's PayPal tools and their schemas (refunds, invoices, orders); Countersign wraps each call | `src/paypal.js`, `src/agent.js` |
+| **Invoicing API** (via the toolkit) | Wholesale invoices created and sent for real in the sandbox | `create_invoice`, `send_invoice` |
+| **Payouts API** | Supplier payments ("pay bill NW-2207") | `src/paypal.js` → `payout()` |
+| **Payments API: refunds** (via the toolkit) | Customer refunds against captures of the shop's orders | `create_refund` |
+| **Orders v2** | Seeds the shop's orders as real sandbox captures when the account supports card processing | `seedCapture()` |
+
+Also used: **Google Gemini 3.5 Flash** through its OpenAI-compatible endpoint, which accepts the toolkit's OpenAI-format tool schemas directly. Hosted on **Render** (web service, free plan, `render.yaml` included).
+
+## Who stays in charge
+
+- **The owner.** Approvals go through `POST /api/approvals/:id/approve`, which needs the owner PIN. The agent has no tool that reaches it. Hard BLOCK rules (refund above what was paid, a vendor's "new bank details", a duplicate bill) cannot be countersigned at all; the owner has to fix the books first, for example by verifying the vendor by phone.
+- **What the model is not allowed to decide:** whether money moves, how much, or to whom.
+
+## Rules
+
+| Rule | Checks | Verdict on failure |
+|---|---|---|
+| `CAPTURE_IN_BOOKS` | Refund targets a capture of one of our orders | BLOCK |
+| `REFUND_WITHIN_CAPTURE` | Cumulative refunds never exceed what was paid | BLOCK |
+| `AMOUNT_FROM_BOOKS` | Refund equals an order line, unit price, total or remaining balance | HOLD |
+| `REQUESTER_IS_CUSTOMER` | The request comes from the customer on that order | HOLD |
+| `PAYEE_MATCHES_VENDOR_ON_FILE` | Email claims to be a known vendor but names a different payee | BLOCK |
+| `PAYEE_ON_FILE`, `MATCHES_OPEN_BILL` | Pay only vendors on file, only open bills, exact amount | HOLD |
+| `NOT_ALREADY_PAID` | No duplicate payment of a paid bill | BLOCK |
+| `RECIPIENT_IS_CUSTOMER`, `PRICES_FROM_CATALOG` | Invoices only to customers, at list prices | HOLD |
+| `AUTO_REFUND_LIMIT`, `AUTO_PAYMENT_LIMIT`, `DAILY_BUDGET` | $150 / $400 per action, $600 per day automatic | HOLD |
+| `UNTRUSTED_INSTRUCTIONS` | Hidden HTML text or instructions addressed to the AI | HOLD |
+| `TOOL_ALLOWED` | Only the owner's allowlisted tools | BLOCK |
+
+## Honest limits
+
+- **Sandbox only, fictional business.** No real money or customers.
+- **Refund captures.** Refunds need a captured payment. At boot Countersign tries to create real sandbox captures with a PayPal test card. The sandbox account used for the live demo currently refuses card captures ("Payee account is not setup to be able to process card payments"), so on the live demo **refunds run against simulated captures, and the UI and results say so**. Invoices and supplier payouts run against the real sandbox. With a card-enabled sandbox account, refunds go to PayPal unchanged (same code path).
+- **Email is simulated.** The inbox is a seeded case library plus a "write your own" box; there is no mailbox integration yet.
+- **The baseline never executes.** The unguarded arm records what the agent would have done; it is never sent to PayPal.
+- **Free hosting.** The Render free instance sleeps when idle (first request can take up to ~50 s). Demo sessions live in memory and reset on restart. Recorded runs are replayed if the live model quota is exhausted, and are labelled as recorded.
+- **Heuristics are narrow on purpose.** The hidden-instruction scanner is a few regexes; it only escalates to HOLD. The safety comes from provenance, not from detecting attacks.
+
+## Run it yourself
+
+```bash
+npm install
+npm test                  # 7 tests, offline: the whole case library through a scripted, maximally gullible agent
+PAYPAL_CLIENT_ID=... PAYPAL_CLIENT_SECRET=... GEMINI_API_KEY=... npm start
+# open http://localhost:3000
+```
+
+Without PayPal keys it runs against a PayPal mock (labelled); without a Gemini key, sample emails replay their recorded runs.
+
+**Deploy:** fork, then on Render choose *New → Blueprint* (uses `render.yaml`) and set `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`, `GEMINI_API_KEY`.
+
+**Reproduce the benchmark:** `POST /api/eval/start` with header `x-admin-token`, then `GET /api/eval/latest > bundle.json` and `node eval/write-results.js bundle.json`.
+
+## Layout
+
+```
+server.js            API + static UI, sessions, owner approvals, eval runner
+src/policy.js        the guard: rules, provenance, untrusted-content scanner (no model calls)
+src/agent.js         the agent loop: Gemini proposes, policy decides, PayPal executes
+src/paypal.js        PayPal Agent Toolkit + Payouts + sandbox seeding, and an offline mock
+src/llm.js           Gemini via its OpenAI-compatible endpoint
+src/eval.js          scoring against expected outcomes
+src/audit.js         hash-chained receipts
+data/world.json      the fictional shop's books
+data/cases.json      the 16 cases with expected outcomes
+public/              the UI (no framework)
+```
+
+MIT licensed.

@@ -147,7 +147,8 @@ function renderEvent(e) {
 
   const rules = (d.rules || []).map((r) => `<li class="${r.ok ? 'good' : 'bad'}"><span>${r.ok ? '✓' : r.verdict === 'BLOCK' ? '⛔' : '✋'}</span><span>${esc(r.msg)} <span class="rid">${esc(r.id)}</span></span></li>`).join('');
   const prov = (d.provenance || []).map((p) => `<span class="${esc(p.source)}">${esc(p.field)}: <b>${esc(typeof p.value === 'number' ? money(p.value) : p.value)}</b> ← ${p.source === 'books' ? 'books' : p.source === 'email-only' ? 'email only' : 'unknown'}${p.note ? ' · ' + esc(p.note) : ''}</span>`).join('');
-  const res = e.result ? `<div class="result">${e.status === 'executed' ? `PayPal ${esc(e.result.via || '')}: ` : 'Recorded only: '}${esc(Object.entries(e.result).filter(([k, v]) => typeof v !== 'object' && k !== 'mock' && k !== 'via').map(([k, v]) => `${k}=${v}`).join(' · '))}</div>` : '';
+  const via = e.result && e.result.via === 'sandbox' ? 'PayPal sandbox' : e.result && e.result.via === 'mock' ? 'Simulated (no sandbox card capture available)' : 'PayPal';
+  const res = e.result ? `<div class="result">${e.status === 'executed' ? `${via}: ` : 'Recorded only: '}${esc(Object.entries(e.result).filter(([k, v]) => typeof v !== 'object' && k !== 'mock' && k !== 'via').map(([k, v]) => `${k}=${v}`).join(' · '))}</div>` : '';
   const errMsg = e.error ? `<div class="result">${esc(e.error)}</div>` : '';
   const would = unguarded ? `<div class="small" style="margin-top:6px">Countersign would have said: <span class="v ${d.verdict}">${d.verdict}</span></div>` : '';
   const held = e.status === 'held' ? `<div class="small" style="margin-top:6px">Waiting in the owner's queue → <a href="#" data-approve="${esc(e.approval_id)}">countersign or reject</a></div>` : '';
@@ -185,7 +186,8 @@ async function loadSession() {
   $('#approvals').querySelectorAll('[data-ap]').forEach((b) => b.addEventListener('click', () => decide(b.dataset.ap, b.dataset.act, b)));
 
   const modes = new Set(s.orders.map((o) => o.mode));
-  $('#paypalMode').textContent = modes.has('sandbox') ? '· real PayPal sandbox captures' : '· mock captures';
+  $('#paypalMode').textContent = modes.has('sandbox') ? '· real PayPal sandbox captures' : '· simulated captures';
+  $('#paypalMode').title = s.seed_errors && s.seed_errors.length ? `Refunds run against simulated captures because the PayPal sandbox refused to create card captures: ${s.seed_errors[0]}. Invoices and supplier payouts still run in the real sandbox.` : '';
   $('#orders').innerHTML = s.orders.map((o) => `<tr title="capture ${esc(o.capture_id)}"><td>#${o.order_number}</td><td>${esc(o.customer)}</td><td class="r">${money(o.total)}</td><td class="r">${o.refunded ? money(o.refunded) : '–'}</td></tr>`).join('');
   $('#bills').innerHTML = s.bills.map((b) => `<tr><td>${b.bill_id}</td><td>${esc(s.vendors.find((v) => v.id === b.vendor_id)?.name)}</td><td class="r">${money(b.amount)}</td><td>${b.status}</td></tr>`).join('');
   const pct = Math.min(100, (s.auto_outflow_today / s.policy.daily_auto_outflow_budget) * 100);

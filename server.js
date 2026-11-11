@@ -28,17 +28,23 @@ const RECORDED_DIR = path.join(DATA_DIR, 'recorded');
 // ---------- sessions (one per browser) ----------
 const sessions = new Map();
 let seedsThisHour = { hour: -1, n: 0 };
+let lastSeedFailure = null; // { at, error } - avoid retrying a failing sandbox capability on every new session
 async function freshCaptures() {
   const h = new Date().getUTCHours();
   if (seedsThisHour.hour !== h) seedsThisHour = { hour: h, n: 0 };
-  if (paypal.mode !== 'sandbox' || seedsThisHour.n >= 40) return seedCaptures(mockPayPal, world);
+  const recentlyFailed = lastSeedFailure && Date.now() - lastSeedFailure.at < 15 * 60_000;
+  if (paypal.mode !== 'sandbox' || seedsThisHour.n >= 40 || recentlyFailed) {
+    const m = await seedCaptures(mockPayPal, world);
+    return { ...m, errors: recentlyFailed ? [lastSeedFailure.error] : m.errors };
+  }
   seedsThisHour.n++;
   const r = await seedCaptures(paypal, world);
   if (r.errors.length) {
     console.warn('[seed] sandbox capture errors:', r.errors.join(' | '));
+    lastSeedFailure = { at: Date.now(), error: r.errors[0] };
     const m = await seedCaptures(mockPayPal, world);
     for (const k of Object.keys(m.captures)) if (!r.captures[k]) r.captures[k] = m.captures[k];
-  }
+  } else lastSeedFailure = null;
   return r;
 }
 async function getSession(req) {
@@ -66,7 +72,7 @@ function allowLive(ip) {
   if (dayHits.day !== day) dayHits = { day, n: 0 };
   const now = Date.now();
   const hits = (ipHits.get(ip) || []).filter((t) => now - t < 3600_000);
-  if (hits.length >= 20 || dayHits.n >= Number(process.env.DAILY_LIVE_RUNS || 300)) return false;
+  if (hits.length >= 20 || dayHits.n >= Number(process.env.DAILY_LIVE_RUNS || 150)) return false;
   hits.push(now); ipHits.set(ip, hits); dayHits.n++;
   return true;
 }
@@ -99,7 +105,7 @@ app.use(express.json({ limit: '100kb' }));
 app.use(express.static(path.join(here, 'public'), { setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache') }));
 
 app.get('/api/health', (req, res) => {
-  res.json({ ok: true, version: VERSION, paypal_mode: paypal.mode, llm: llm ? { provider: llm.provider, models: llm.models } : null, cases: cases.length, audit_entries: audit.entries.length });
+  res.json({ ok: true, version: VERSION, paypal_mode: paypal.mode, llm: llm ? { provider: llm.provider, models: llm.models, status: llm.status() } : null, cases: cases.length, audit_entries: audit.entries.length });
 });
 
 app.get('/api/inbox', (req, res) => {
@@ -241,7 +247,8 @@ app.post('/api/eval/start', async (req, res) => {
     for (const c of list) {
       for (const guard of ['enforce', 'off']) {
         job.progress.push(`${c.id}/${guard}`);
-        const r = await runCase(c, { world, captures: seeded.captures, llm, paypal, mockPayPal, guard });
+        job.current = { id: c.id, guard, events: [] };
+        const r = await runCase(c, { world, captures: seeded.captures, llm, paypal, mockPayPal, guard, onEvent: (ev) => job.current.events.push({ type: ev.type, tool: ev.tool, status: ev.status, model: ev.model }) });
         (guard === 'off' ? job.baseline : job.guarded).push(r);
         await new Promise((r2) => setTimeout(r2, Number(process.env.EVAL_PAUSE_MS || 4000)));
       }
