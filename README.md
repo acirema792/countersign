@@ -19,7 +19,7 @@ A model cannot be trusted to notice every time. **So Countersign never asks it t
 Countersign sits between an AI agent and PayPal:
 
 1. **An email arrives.** It is untrusted text.
-2. **The agent proposes.** Gemini 3.5 Flash, equipped with tools from PayPal's official **Agent Toolkit** (`create_refund`, `create_invoice`, `send_invoice`, `get_order`) plus PayPal Payouts, decides what it *wants* to do.
+2. **The agent proposes.** Gemini 3.5 Flash-Lite (free tier), equipped with tools from PayPal's official **Agent Toolkit** (`create_refund`, `create_invoice`, `send_invoice`, `get_order`) plus PayPal Payouts, decides what it *wants* to do.
 3. **Code decides.** Every proposed money action goes through a deterministic policy engine ([`src/policy.js`](src/policy.js)) before anything reaches PayPal. The core rule is **provenance**: every amount and payee must trace back to the business's own books (an order line, an open bill, a vendor's PayPal address on file, a catalog price), not just to the email.
 4. **PayPal executes, or the owner countersigns.**
    - **ALLOW** runs now in the PayPal sandbox.
@@ -46,7 +46,7 @@ Full case-by-case table: [BENCHMARK-RESULTS.md](BENCHMARK-RESULTS.md). Machine-r
 | **Payments API: refunds** (via the toolkit) | Customer refunds against captures of the shop's orders | `create_refund` |
 | **Orders v2** | Seeds the shop's orders as real sandbox captures when the account supports card processing | `seedCapture()` |
 
-Also used: **Google Gemini 3.5 Flash** through its OpenAI-compatible endpoint, which accepts the toolkit's OpenAI-format tool schemas directly. Hosted on **Render** (web service, free plan, `render.yaml` included).
+Also used: **Google Gemini 3.5 Flash-Lite** (falls back to 3.1 Flash-Lite) through its OpenAI-compatible endpoint, which accepts the toolkit's OpenAI-format tool schemas directly. Hosted on **Render** (web service, free plan, `render.yaml` included).
 
 ## Who stays in charge
 

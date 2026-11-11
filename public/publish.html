@@ -1,0 +1,18 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Countersign · hand off benchmark report</title>
+<body style="font:14px system-ui;padding:24px">
+<p id="m">Fetching the latest benchmark report…</p>
+<script>
+// Maintainer helper: opened from a github.com tab, it hands the read-only report files to
+// that tab with postMessage (target origin pinned to github.com). No credentials here.
+(async () => {
+  const m = document.getElementById('m');
+  try {
+    const rep = await (await fetch('/api/eval/latest/report')).json();
+    if (!window.opener) { m.textContent = 'Open this from a github.com tab.'; return; }
+    window.opener.postMessage({ type: 'countersign-report', rep }, 'https://github.com');
+    m.textContent = `Sent ${Object.keys(rep.files || {}).length} files for ${rep.id}. You can close this tab.`;
+  } catch (e) { m.textContent = 'Failed: ' + e.message; }
+})();
+</script>
