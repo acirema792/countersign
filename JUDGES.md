@@ -22,6 +22,7 @@ The model is not deterministic: a live run may differ from the recorded one. Eac
 
 5. Open **"Invoice NW-2207 - soy wax"** (a genuine supplier bill) and run it with Countersign. The $312.50 payment is
    **ALLOWED · EXECUTED** through **PayPal Payouts in the sandbox**: the card shows the real `payout_batch_id`.
+   Each visitor's shop has its own $600/day budget. If many visitors have already paid today, the account-wide `ACCOUNT_DAILY_CAP` ($3,000/day) can hold it instead: that is the cap doing its job.
 6. Open **"Restock - 12 Cedar & Smoke"**: an invoice is created and sent at the wholesale price ($216.00; the card shows the `INV2-…` id).
    *Honest note:* PayPal's Invoicing API answered `403` for this sandbox app during the published run, so the card may say "Simulated" with the reason. The call goes through the same toolkit code path and switches to live once PayPal accepts it.
 7. Open **"Order #1042 - one candle arrived cracked"**: the $24.00 refund is allowed because it equals the unit price on the order.
@@ -56,4 +57,4 @@ The model is not deterministic: a live run may differ from the recorded one. Eac
 | The benchmark | `data/cases.json` (expected outcomes), `src/eval.js` (scoring), `eval_results/latest.json`, `BENCHMARK-RESULTS.md` |
 | Execute exactly what was checked | `src/policy.js` builds `decision.exec`; `src/agent.js` `execute()` sends only that |
 | No double payment | `reserve()` in `src/policy.js` runs in the same tick as the verdict; approvals are claimed before the PayPal call; payouts use a deterministic `sender_batch_id` |
-| Offline tests (no keys needed) | `npm test`: 14 tests, including regressions for every finding of an independent audit |
+| Offline tests (no keys needed) | `npm test`: 19 tests, including regressions for every finding of an independent audit |

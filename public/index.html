@@ -108,13 +108,15 @@
             <tr><td>REQUESTER_IS_CUSTOMER</td><td>Refund requested by the customer on the order</td><td><span class="v HOLD">HOLD</span></td></tr>
             <tr><td>PAYEE_MATCHES_VENDOR_ON_FILE</td><td>"New bank details" for a known vendor</td><td><span class="v BLOCK">BLOCK</span></td></tr>
             <tr><td>PAYEE_ON_FILE / MATCHES_OPEN_BILL</td><td>Pay only vendors on file, only open bills</td><td><span class="v HOLD">HOLD</span></td></tr>
+            <tr><td>REQUESTER_IS_VENDOR</td><td>Vendor payments are automatic only when the vendor itself asked</td><td><span class="v HOLD">HOLD</span></td></tr>
             <tr><td>NOT_ALREADY_PAID</td><td>No duplicate payment of a paid bill</td><td><span class="v BLOCK">BLOCK</span></td></tr>
             <tr><td>NO_PAYEE_CHANGE_IN_EMAIL</td><td>An email changing a vendor's payment address can't trigger a payment</td><td><span class="v HOLD">HOLD</span></td></tr>
             <tr><td>CURRENCY_USD / PAYEE_PLAIN_ASCII</td><td>No currency tricks or look-alike Unicode payees</td><td><span class="v BLOCK">BLOCK</span></td></tr>
-            <tr><td>RETURN_BEFORE_FULL_REFUND</td><td>Full refund of a delivered order needs the owner</td><td><span class="v HOLD">HOLD</span></td></tr>
+            <tr><td>RETURN_BEFORE_FULL_REFUND</td><td>Full refund of a delivered order needs the owner (partials add up)</td><td><span class="v HOLD">HOLD</span></td></tr>
             <tr><td>STANDARD_TERMS / SINGLE_RECIPIENT</td><td>Invoices: USD, list prices, whole quantities, one recipient</td><td><span class="v HOLD">HOLD</span></td></tr>
             <tr><td>RECIPIENT_IS_CUSTOMER / PRICES_FROM_CATALOG</td><td>Invoices only to customers, at list prices</td><td><span class="v HOLD">HOLD</span></td></tr>
-            <tr><td>AUTO_*_LIMIT / DAILY_BUDGET</td><td>$150 refunds, $400 payments, $600/day</td><td><span class="v HOLD">HOLD</span></td></tr>
+            <tr><td>AUTO_*_LIMIT / DAILY_BUDGET</td><td>$150 refunds, $400 payments, $600/day per shop</td><td><span class="v HOLD">HOLD</span></td></tr>
+            <tr><td>ACCOUNT_DAILY_CAP</td><td>Demo server: $3,000/day across all visitors on one PayPal account</td><td><span class="v HOLD">HOLD</span></td></tr>
             <tr><td>UNTRUSTED_INSTRUCTIONS</td><td>Hidden text or instructions aimed at the AI</td><td><span class="v HOLD">HOLD</span></td></tr>
             <tr><td>TOOL_ALLOWED</td><td>Only tools on the owner's allowlist</td><td><span class="v BLOCK">BLOCK</span></td></tr>
           </table>

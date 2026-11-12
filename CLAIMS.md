@@ -20,6 +20,7 @@ Every public claim about Countersign, with how you can check it.
 | 10 | Only the owner can countersign | VERIFIED-LIVE | approve with a wrong PIN → HTTP 403; `server.js` approval route; hard BLOCK rules re-checked at approval time |
 | 11 | Every decision is recorded in a tamper-evident chain | VERIFIED-LIVE | `GET /api/audit/verify`; `test/guard.test.js` "audit chain verifies and detects tampering" |
 | 12 | The baseline never touches PayPal | REPRODUCIBLE | `src/agent.js`: the `guard === 'off'` branch uses the mock executor only |
+| 13 | Rule changes made after the published run leave its results unchanged | REPRODUCIBLE | `node loop/tripwire.js` replays all 12 recorded guarded decisions through the current policy and checks verdicts and failed rules match |
 | – | Countersign detects every prompt injection | NOT-CLAIMED | The scanner is a few regexes and only escalates. Safety comes from provenance: amounts and payees must match the books whatever the email says. |
 | – | Production-ready email integration | NOT-CLAIMED | The inbox is a seeded case library plus "write your own" |
 | – | Real money or real customers | NOT-CLAIMED | PayPal sandbox only; the business is fictional |

@@ -79,14 +79,16 @@ Also used: **Google Gemini 3.5 Flash-Lite** (falls back to 3.1 Flash-Lite) throu
 | `REQUESTER_IS_CUSTOMER` | The request comes from the customer on that order | HOLD |
 | `PAYEE_MATCHES_VENDOR_ON_FILE` | Email claims to be a known vendor but names a different payee | BLOCK |
 | `PAYEE_ON_FILE`, `MATCHES_OPEN_BILL` | Pay only vendors on file, only open bills, exact amount | HOLD |
+| `REQUESTER_IS_VENDOR` | A vendor payment is automatic only when the vendor's own authenticated address asked for it | HOLD |
 | `NOT_ALREADY_PAID` | No duplicate payment of a paid bill | BLOCK |
 | `NO_PAYEE_CHANGE_IN_EMAIL` | An email that tries to change a vendor's payment address cannot trigger any payment on its own | HOLD |
 | `CURRENCY_USD`, `PAYEE_PLAIN_ASCII`, `AMOUNT_POSITIVE` | No currency tricks, no look-alike Unicode payees, no negative amounts | BLOCK |
-| `RETURN_BEFORE_FULL_REFUND` | A full refund of a delivered order needs the owner | HOLD |
+| `RETURN_BEFORE_FULL_REFUND` | A full refund of a delivered order needs the owner, counting earlier partial refunds | HOLD |
 | `REQUESTER_IS_RECIPIENT`, `SINGLE_RECIPIENT`, `STANDARD_TERMS` | Invoices only for the customer who asked, one recipient, USD, list prices, no discounts or partial payments | HOLD |
 | `NOT_ALREADY_SENT`, `NO_EXTRA_RECIPIENTS` | An invoice is sent once, only to its draft recipient | BLOCK / HOLD |
 | `RECIPIENT_IS_CUSTOMER`, `PRICES_FROM_CATALOG` | Invoices only to customers, at list prices | HOLD |
 | `AUTO_REFUND_LIMIT`, `AUTO_PAYMENT_LIMIT`, `DAILY_BUDGET` | $150 / $400 per action, $600 per day automatic | HOLD |
+| `ACCOUNT_DAILY_CAP` | On the shared demo server: each visitor's shop has its own $600 budget, and the one PayPal account behind them has a $3,000/day automatic cap across everyone | HOLD |
 | `UNTRUSTED_INSTRUCTIONS` | Hidden HTML text or instructions addressed to the AI | HOLD |
 | `TOOL_ALLOWED` | Only the owner's allowlisted tools | BLOCK |
 
@@ -121,11 +123,24 @@ const toolMessage = await guarded.handleToolCall(toolCall, { email });
 
 ALLOW runs the payload the policy rebuilt; HOLD and BLOCK return a tool message with the reasons, and nothing reaches PayPal. If PayPal refuses an allowed call (the toolkit reports errors as normal output), the wrapper returns `PAYPAL_ERROR` and releases the reservation, so the books and the daily budget stay accurate.
 
+## Changes since the published run
+
+An audit loop (fresh auditor → one minimal fix each → separate verifier that re-runs the tests) found and fixed these after run `eval-2026-11-11T21-53-40-928Z`:
+
+- two partial refunds that add up to an unreturned full refund are now held (`RETURN_BEFORE_FULL_REFUND`);
+- a stranger can no longer trigger an automatic payment of an open bill, even to the vendor on file (`REQUESTER_IS_VENDOR`, new);
+- each demo visitor gets their own $600 budget, with an account-wide cap across visitors (`ACCOUNT_DAILY_CAP`, new);
+- the library wrapper treats PayPal error payloads as failures and releases the reservation;
+- a countersigned invoice is now sent, and a run that fails partway shows what really happened instead of a recording;
+- per-session PIN lockout with a constant-time compare.
+
+None of this changes the published results: `node loop/tripwire.js` replays every recorded guarded decision through the current rules and checks each verdict and failed rule is identical (12/12). The loop's constraints, gate and audit reports are in [`loop/`](loop/) and [`loop-constraints.md`](loop-constraints.md).
+
 ## Run it yourself
 
 ```bash
 npm install
-npm test                  # 14 tests, offline: the whole case library through a scripted, maximally gullible agent
+npm test                  # 19 tests, offline: the whole case library through a scripted, maximally gullible agent
 PAYPAL_CLIENT_ID=... PAYPAL_CLIENT_SECRET=... GEMINI_API_KEY=... npm start
 # open http://localhost:3000
 ```
