@@ -88,7 +88,7 @@ Also used: **Google Gemini 3.5 Flash-Lite** (falls back to 3.1 Flash-Lite) throu
 | `NOT_ALREADY_SENT`, `NO_EXTRA_RECIPIENTS` | An invoice is sent once, only to its draft recipient | BLOCK / HOLD |
 | `RECIPIENT_IS_CUSTOMER`, `PRICES_FROM_CATALOG` | Invoices only to customers, at list prices | HOLD |
 | `AUTO_REFUND_LIMIT`, `AUTO_PAYMENT_LIMIT`, `DAILY_BUDGET` | $150 / $400 per action, $600 per day automatic | HOLD |
-| `ACCOUNT_DAILY_CAP` | On the shared demo server: each visitor's shop has its own $600 budget, and the one PayPal account behind them has a $3,000/day automatic cap across everyone | HOLD |
+| `ACCOUNT_DAILY_CAP` | On the shared demo server: each visitor's shop has its own $600 budget, and the one PayPal account behind them has a $10,000/day automatic cap across everyone | HOLD |
 | `UNTRUSTED_INSTRUCTIONS` | Hidden HTML text or instructions addressed to the AI | HOLD |
 | `TOOL_ALLOWED` | Only the owner's allowlisted tools | BLOCK |
 
@@ -121,7 +121,7 @@ const guarded = guardToolkit(toolkit, { state: createState(loadWorld(), captures
 const toolMessage = await guarded.handleToolCall(toolCall, { email });
 ```
 
-ALLOW runs the payload the policy rebuilt; HOLD and BLOCK return a tool message with the reasons, and nothing reaches PayPal. If PayPal refuses an allowed call (the toolkit reports errors as normal output), the wrapper returns `PAYPAL_ERROR` and releases the reservation, so the books and the daily budget stay accurate.
+Pass the email with `auth: 'pass'` only when your mail system verified the sender (SPF/DKIM/DMARC); unauthenticated requests for refunds and vendor payments are held for the owner. ALLOW runs the payload the policy rebuilt; HOLD and BLOCK return a tool message with the reasons, and nothing reaches PayPal. If PayPal refuses an allowed call (the toolkit reports errors as normal output), the wrapper returns `PAYPAL_ERROR` and releases the reservation, so the books and the daily budget stay accurate.
 
 ## Changes since the published run
 

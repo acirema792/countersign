@@ -28,7 +28,7 @@ const RECORDED_DIR = path.join(DATA_DIR, 'recorded');
 // Each demo session (one visitor's shop) has its own $600/day automatic budget (DAILY_BUDGET).
 // The PayPal account behind all sessions also has a hard daily cap across everyone (ACCOUNT_DAILY_CAP),
 // so many visitors together still can't drain it.
-const ACCOUNT_DAILY_CAP = Number(process.env.ACCOUNT_DAILY_CAP || 3000);
+const ACCOUNT_DAILY_CAP = Number(process.env.ACCOUNT_DAILY_CAP || 10000);
 let accountLedger = newLedger();
 function ledgerForToday() {
   const day = new Date().toISOString().slice(0, 10);

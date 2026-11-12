@@ -1,1 +1,98 @@
-{"goal":"Raise Countersign audit score to 9.0 without moving any published result","attempts":[]}
+{
+ "goal": "Raise Countersign audit score to 9.0 without moving any published result",
+ "attempts": [
+  {
+   "round": 1,
+   "finding": "F2",
+   "action": "cumulative refunds in RETURN_BEFORE_FULL_REFUND",
+   "outcome": "success",
+   "verified": "APPROVE"
+  },
+  {
+   "round": 1,
+   "finding": "F3",
+   "action": "library wrapper: toolkit error payloads, invoice href ids, README captures",
+   "outcome": "success",
+   "verified": "APPROVE"
+  },
+  {
+   "round": 1,
+   "finding": "F4",
+   "action": "no recorded fallback after live proposals; hasOwn invoice lookup; array guards",
+   "outcome": "success",
+   "verified": "APPROVE"
+  },
+  {
+   "round": 1,
+   "finding": "F6",
+   "action": "JUDGES invoice 403 caveat",
+   "outcome": "success",
+   "verified": "APPROVE"
+  },
+  {
+   "round": 1,
+   "finding": "F7",
+   "action": "README: where the guard acted in the live run",
+   "outcome": "success",
+   "verified": "APPROVE"
+  },
+  {
+   "round": 1,
+   "finding": "F8",
+   "action": "PIN lockout + constant-time compare",
+   "outcome": "failure",
+   "verified": "REJECT",
+   "error": "lockout keyed per IP: one judge locks out others on the same NAT"
+  },
+  {
+   "round": 1,
+   "finding": "F9",
+   "action": "per-tool countersign message (wording only)",
+   "outcome": "failure",
+   "verified": "REJECT",
+   "error": "only reworded the toast; countersigned invoice still never sent"
+  },
+  {
+   "round": 1,
+   "finding": "F10",
+   "action": "LRU session eviction",
+   "outcome": "success",
+   "verified": "APPROVE"
+  },
+  {
+   "round": 1,
+   "finding": "F8",
+   "action": "attempt 2: lockout keyed per session",
+   "outcome": "success",
+   "verified": "APPROVE"
+  },
+  {
+   "round": 1,
+   "finding": "F9",
+   "action": "attempt 2: send approved invoice through evaluate/reserve/execute",
+   "outcome": "success",
+   "verified": "APPROVE"
+  },
+  {
+   "round": 1,
+   "finding": "F1",
+   "action": "owner-approved: per-session budget + ACCOUNT_DAILY_CAP",
+   "outcome": "success",
+   "verified": "APPROVE"
+  },
+  {
+   "round": 1,
+   "finding": "F5",
+   "action": "owner-approved: REQUESTER_IS_VENDOR",
+   "outcome": "success",
+   "verified": "APPROVE"
+  },
+  {
+   "round": 1,
+   "finding": "docs",
+   "action": "commit audit report; library auth note; cap $10,000 (verifier risk note)",
+   "outcome": "success",
+   "verified": "APPROVE-after-correction"
+  }
+ ]
+}
