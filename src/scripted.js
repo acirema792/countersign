@@ -2,13 +2,17 @@
 // Kept in src/ so the server never depends on the test folder being deployed.
 // scriptedLLM returns pre-written tool calls in order.
 // It behaves like a maximally gullible agent: it does exactly what each email asks.
-export function scriptedLLM(steps) {
+// failAfter: throw a model error once the steps run out (tests a run that dies partway).
+export function scriptedLLM(steps, { failAfter = false } = {}) {
   let i = 0;
   return {
     provider: 'scripted', models: ['scripted'],
     async chat({ messages }) {
       const s = steps[i++];
-      if (!s) return { message: { role: 'assistant', content: 'Done.' }, model: 'scripted', usage: { total_tokens: 0 }, ms: 0 };
+      if (!s) {
+        if (failAfter) { const e = new Error('429 model quota (scripted failure)'); e.status = 429; throw e; }
+        return { message: { role: 'assistant', content: 'Done.' }, model: 'scripted', usage: { total_tokens: 0 }, ms: 0 };
+      }
       let lastInvoice = '';
       for (const m of messages) if (m.role === 'tool') { try { const j = JSON.parse(m.content); if (j.invoice_id) lastInvoice = j.invoice_id; } catch {} }
       const calls = [s].map((c, k) => ({ id: `call_${i}_${k}`, type: 'function', function: { name: c[0], arguments: JSON.stringify(c[1] || {}).replace('$LAST_INVOICE', lastInvoice) } }));

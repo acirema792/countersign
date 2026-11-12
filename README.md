@@ -143,7 +143,7 @@ None of this changes the published results: `node loop/tripwire.js` replays ever
 
 ```bash
 npm install
-npm test                  # 27 tests, offline: the whole case library through a scripted, maximally gullible agent
+npm test                  # 31 tests, offline: the whole case library through a scripted, maximally gullible agent
 PAYPAL_CLIENT_ID=... PAYPAL_CLIENT_SECRET=... GEMINI_API_KEY=... npm start
 # open http://localhost:3000
 ```

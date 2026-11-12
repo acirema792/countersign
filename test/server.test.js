@@ -100,3 +100,45 @@ test('server: gullible replays are rate limited and stale replay approvals are p
   const s = (await v.call('/api/session')).body;
   assert.ok(s.approvals.filter((a) => a.simulated && a.status === 'pending').length <= 20);
 });
+
+test('server: a countersigned invoice is created and then sent (F9)', async () => {
+  process.env.SCRIPTED_LLM = '1';
+  // Off-catalog price: the guard holds the invoice for the owner.
+  process.env.SCRIPTED_STEPS = JSON.stringify([['create_invoice', { currency_code: 'USD', primary_recipients: [{ billing_info: { email_address: 'orders@hazelrye.example' } }], items: [{ name: 'Cedar & Smoke candle, 8 oz', quantity: '12', unit_amount: { currency_code: 'USD', value: '15.00' } }] }]]);
+  try {
+    const v = visitor();
+    const r = await v.run({ case_id: 'L2' });
+    assert.equal(proposals(r)[0].status, 'held');
+    const ap = await v.pending();
+    const ok = await v.call(`/api/approvals/${ap.id}/approve`, { pin: '2468' });
+    assert.equal(ok.status, 200);
+    assert.ok(ok.body.result.invoice_id);
+    assert.equal(ok.body.sent.status, 'SENT');
+  } finally { delete process.env.SCRIPTED_STEPS; }
+});
+
+test('server: a run that fails after a live proposal shows what happened, not a recording (F4)', async () => {
+  process.env.SCRIPTED_LLM = '1'; process.env.SCRIPTED_FAIL_AFTER = '1';
+  try {
+    const partial = await visitor().run({ case_id: 'L1' }); // refunds $24 (executed), then the model fails
+    assert.equal(partial.source, 'live');
+    assert.equal(partial.status, 'error');
+    assert.match(partial.error, /did happen/);
+    assert.equal(proposals(partial)[0].status, 'executed');
+    process.env.SCRIPTED_STEPS = '[]'; // fails before any proposal: the recorded run is shown instead
+    const early = await visitor().run({ case_id: 'A6' });
+    assert.equal(early.source, 'recorded');
+  } finally { delete process.env.SCRIPTED_FAIL_AFTER; delete process.env.SCRIPTED_STEPS; }
+});
+
+test('server: an active session survives 300 newer sessions (least-recently-used eviction, F10)', async () => {
+  process.env.SCRIPTED_LLM = '1';
+  const keep = visitor();
+  await keep.run({ case_id: 'L5' });
+  assert.ok(await keep.pending());
+  for (let i = 0; i < 310; i++) {
+    await visitor().call('/api/session');
+    if (i % 50 === 0) await keep.call('/api/session'); // the judge keeps using it
+  }
+  assert.ok(await keep.pending(), 'the active session and its pending approval were evicted');
+});

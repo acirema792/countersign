@@ -57,4 +57,4 @@ The model is not deterministic: a live run may differ from the recorded one. Eac
 | The benchmark | `data/cases.json` (expected outcomes), `src/eval.js` (scoring), `eval_results/latest.json`, `BENCHMARK-RESULTS.md` |
 | Execute exactly what was checked | `src/policy.js` builds `decision.exec`; `src/agent.js` `execute()` sends only that |
 | No double payment | `reserve()` in `src/policy.js` runs in the same tick as the verdict; approvals are claimed before the PayPal call; payouts use a deterministic `sender_batch_id` |
-| Offline tests (no keys needed) | `npm test`: 27 tests, including regressions for every finding of an independent audit |
+| Offline tests (no keys needed) | `npm test`: 31 tests, including regressions for every finding of an independent audit |

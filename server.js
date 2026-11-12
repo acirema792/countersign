@@ -202,7 +202,9 @@ app.post('/api/run', async (req, res, next) => {
       runLLM = scriptedLLM(gullibleScript(case_id, capOf(runState)));
       Object.assign(run, { source: 'gullible', note: 'Scripted gullible agent: it does whatever the email asks. Simulated PayPal, on a fresh copy of the demo books (your own books are untouched).' });
     } else if (process.env.SCRIPTED_LLM === '1' && case_id) { // local UI development only; never set in production
-      runLLM = scriptedLLM(gullibleScript(case_id, capOf(s.state)));
+      // Tests may supply their own steps, and make the model fail after them.
+      const steps = process.env.SCRIPTED_STEPS ? JSON.parse(process.env.SCRIPTED_STEPS) : gullibleScript(case_id, capOf(s.state));
+      runLLM = scriptedLLM(steps, { failAfter: process.env.SCRIPTED_FAIL_AFTER === '1' });
     }
     const live = runLLM && (runLLM !== llm || allowLive(req.ip));
     if (!live) {
