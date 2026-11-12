@@ -220,7 +220,9 @@ app.post('/api/run', async (req, res, next) => {
     }
 
     res.json({ run_id: id });
-    runAgent({ state: runState, email, llm: runLLM, paypal: runPayPal, mockPayPal: runPayPal === paypal ? mockPayPal : runPayPal, guard: g, audit, approvals, runId: id, label, onEvent: (ev) => run.events.push(ev) })
+    // Replay entries are marked in the shared receipt log so nobody mistakes them for sandbox activity.
+    const runAudit = runPayPal === paypal ? audit : { append: (e) => audit.append({ ...e, simulated: 'gullible-agent replay' }) };
+    runAgent({ state: runState, email, llm: runLLM, paypal: runPayPal, mockPayPal: runPayPal === paypal ? mockPayPal : runPayPal, guard: g, audit: runAudit, approvals, runId: id, label, onEvent: (ev) => run.events.push(ev) })
       .then((r) => Object.assign(run, { status: 'done', final: r.final, models: r.models, tokens: r.tokens, ms: Date.now() - run.started }))
       .catch((e) => {
         console.error('[run]', e);
@@ -271,7 +273,7 @@ app.post('/api/approvals/:id/:action(approve|reject)', async (req, res, next) =>
     if (pin !== 'ok') return res.status(pin === 'locked' ? 429 : 403).json({ error: pin === 'locked' ? 'Too many wrong PINs in this session. Try again in 10 minutes.' : 'Only the owner can countersign: wrong owner PIN.' });
     if (req.params.action === 'reject') {
       ap.status = 'rejected'; ap.decided = Date.now();
-      audit.append({ run: ap.runId, event: 'owner-rejected', tool: ap.tool, approval: ap.id });
+      audit.append({ run: ap.runId, event: 'owner-rejected', tool: ap.tool, approval: ap.id, ...(ap.simulated ? { simulated: 'gullible-agent replay' } : {}) });
       return res.json(ap);
     }
     // Gullible-agent replays live in a scratch copy of the books and never reach PayPal.
@@ -295,7 +297,7 @@ app.post('/api/approvals/:id/:action(approve|reject)', async (req, res, next) =>
       const result = await execute(ap.tool, now, st, pp, mp, { runId: ap.runId, approvalId: ap.id });
       recordResult(ap.tool, now, st, result);
       ap.status = 'approved'; ap.decided = Date.now(); ap.result = result;
-      audit.append({ run: ap.runId, event: 'owner-countersigned', tool: ap.tool, approval: ap.id, result: { id: result.refund_id || result.payout_batch_id || result.invoice_id, via: result.via } });
+      audit.append({ run: ap.runId, event: 'owner-countersigned', tool: ap.tool, approval: ap.id, result: { id: result.refund_id || result.payout_batch_id || result.invoice_id, via: result.via }, ...(ap.simulated ? { simulated: 'gullible-agent replay' } : {}) });
       // The owner approved the invoice, so send the approved draft through the same checks.
       if (ap.tool === 'create_invoice' && result.invoice_id) {
         const send = evaluate('send_invoice', { invoice_id: result.invoice_id }, { state: st, email: ap.email, scan: scanEmail(ap.email) });
@@ -303,7 +305,7 @@ app.post('/api/approvals/:id/:action(approve|reject)', async (req, res, next) =>
           const undoSend = reserve('send_invoice', send, st, { auto: false });
           try {
             ap.sent = await execute('send_invoice', send, st, pp, mp, { runId: ap.runId, approvalId: ap.id });
-            audit.append({ run: ap.runId, event: 'owner-countersigned-send', tool: 'send_invoice', approval: ap.id, result: { id: ap.sent.invoice_id, via: ap.sent.via } });
+            audit.append({ run: ap.runId, event: 'owner-countersigned-send', tool: 'send_invoice', approval: ap.id, result: { id: ap.sent.invoice_id, via: ap.sent.via }, ...(ap.simulated ? { simulated: 'gullible-agent replay' } : {}) });
           } catch (e) { undoSend(); ap.send_error = String(e.message).slice(0, 200); }
         } else ap.send_error = send.rules.filter((r) => !r.ok).map((r) => r.msg).join(' ');
       }

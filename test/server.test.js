@@ -142,3 +142,16 @@ test('server: an active session survives 300 newer sessions (least-recently-used
   }
   assert.ok(await keep.pending(), 'the active session and its pending approval were evicted');
 });
+
+test('server: replay entries in the shared receipt log are marked simulated (H4)', async () => {
+  process.env.REPLAYS_PER_IP_HOUR = '1000'; // an earlier test used up this address's 30 replays
+  const v = visitor();
+  let r;
+  try { r = await v.run({ case_id: 'A6', guard: 'enforce', gullible: true }); } finally { delete process.env.REPLAYS_PER_IP_HOUR; }
+  assert.equal(r.source, 'gullible');
+  const { body } = await v.call('/api/audit');
+  const mine = body.entries.filter((e) => e.run === r.id);
+  assert.ok(mine.length > 0);
+  assert.ok(mine.every((e) => e.simulated === 'gullible-agent replay'));
+  assert.equal(body.verify.ok, true);
+});

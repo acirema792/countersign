@@ -252,7 +252,7 @@ async function loadAudit() {
   const a = await api('/api/audit');
   $('#auditHead').innerHTML = a.signed_head ? `Signed head: <code>${esc(a.signed_head.head.slice(0, 24))}…</code> · signature <code>${esc(a.signed_head.signature.slice(0, 24))}…</code>` : '';
   $('#auditVerify').innerHTML = a.verify.ok ? `<span class="ok">✓ chain verified · ${a.verify.length} entries</span>` : `<span class="no">✗ ${esc(a.verify.reason)} at #${a.verify.at}</span>`;
-  $('#auditRows').innerHTML = a.entries.slice().reverse().map((e) => `<tr><td>${e.seq}</td><td>${esc(e.ts.slice(11, 19))}</td><td class="mono">${esc(e.run)}</td><td>${esc(e.event || e.tool)}${e.money && e.money.amount ? ' ' + money(e.money.amount) : ''}</td><td>${e.verdict ? `<span class="v ${e.verdict}">${esc(e.verdict)}</span>` : ''}</td><td class="mono">${esc(e.hash.slice(0, 16))}…</td></tr>`).join('');
+  $('#auditRows').innerHTML = a.entries.slice().reverse().map((e) => `<tr><td>${e.seq}</td><td>${esc(e.ts.slice(11, 19))}</td><td class="mono">${esc(e.run)}</td><td>${esc(e.event || e.tool)}${e.money && e.money.amount ? ' ' + money(e.money.amount) : ''}${e.simulated ? ' <span class="small muted">· replay, simulated</span>' : e.result && e.result.via === 'mock' ? ' <span class="small muted">· simulated</span>' : ''}</td><td>${e.verdict ? `<span class="v ${e.verdict}">${esc(e.verdict)}</span>` : ''}</td><td class="mono">${esc(e.hash.slice(0, 16))}…</td></tr>`).join('');
 }
 
 // ---------- boot ----------
