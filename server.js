@@ -173,10 +173,12 @@ app.post('/api/run', async (req, res, next) => {
       .catch((e) => {
         console.error('[run]', e);
         const rec = case_id && recordedFor(case_id);
-        if (rec) {
+        // Never paper over a partial live run: if the agent already proposed (and maybe executed) a call, show what happened.
+        const actedLive = run.events.some((ev) => ev.type === 'proposal');
+        if (rec && !actedLive) {
           const arm = g === 'off' ? rec.baseline : rec.guarded;
           Object.assign(run, { status: 'done', source: 'recorded', note: `Live model call failed (${e.status || ''} ${String(e.message).slice(0, 120)}); showing the recorded run instead.`, events: arm.events, final: arm.final, models: arm.models, recorded_at: rec.recorded_at });
-        } else Object.assign(run, { status: 'error', error: `Model call failed: ${String(e.message).slice(0, 200)}` });
+        } else Object.assign(run, { status: 'error', error: `${actedLive ? 'The run stopped partway; the steps above did happen. ' : ''}Model call failed: ${String(e.message).slice(0, 200)}` });
       });
   } catch (e) { next(e); }
 });

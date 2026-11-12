@@ -211,8 +211,9 @@ function evalPayVendor(args, ctx) {
 }
 
 export function invoiceSummary(state, args) {
-  const recs = (args.primary_recipients || []).map((r) => normEmail(r?.billing_info?.email_address || r?.email_address || ''));
-  const items = (args.items || []).map((it) => ({
+  const list = (x) => (Array.isArray(x) ? x : []);
+  const recs = list(args.primary_recipients).map((r) => normEmail(r?.billing_info?.email_address || r?.email_address || ''));
+  const items = list(args.items).map((it) => (it && typeof it === 'object' ? it : {})).map((it) => ({
     name: String(it.name || ''), qty: Number(it.quantity ?? 1), unit: Number(it.unit_amount?.value ?? it.unit_amount ?? 0),
     extras: ['discount', 'tax'].filter((k) => it[k] != null)
   }));
@@ -269,10 +270,11 @@ function evalCreateInvoice(args, ctx) {
 }
 
 function evalSendInvoice(args, ctx) {
-  const inv = ctx.state.invoices[args.invoice_id];
+  // Own keys only: an id like "toString" must not resolve to an Object.prototype member.
+  const inv = Object.hasOwn(ctx.state.invoices, String(args.invoice_id)) ? ctx.state.invoices[args.invoice_id] : null;
   const rules = [rule('INVOICE_DRAFT_APPROVED', 'BLOCK', !!inv && !inv.baseline, inv && !inv.baseline ? `Draft ${args.invoice_id} passed checks when it was created ($${inv.amount.toFixed(2)} to ${inv.recipient}).` : `Invoice ${args.invoice_id} was not created through Countersign.`)];
   if (inv) rules.push(rule('NOT_ALREADY_SENT', 'BLOCK', inv.status === 'draft', inv.status === 'draft' ? 'Not sent yet.' : `Invoice ${args.invoice_id} is already ${inv.status}.`));
-  if (inv && args.additional_recipients?.length) {
+  if (inv && Array.isArray(args.additional_recipients) && args.additional_recipients.length) {
     rules.push(rule('NO_EXTRA_RECIPIENTS', 'HOLD', false, `Adds recipients not on the draft: ${args.additional_recipients.map((x) => clip(x, 60)).join(', ')}`));
   }
   return { rules, prov: [], money: { direction: 'in', amount: inv ? inv.amount : 0, recipient: inv ? inv.recipient : '' }, exec: { invoice_id: args.invoice_id } };

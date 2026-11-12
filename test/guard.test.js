@@ -235,3 +235,16 @@ test('loop F3: the library wrapper treats toolkit error payloads as failures and
   const sent = await g2.handleToolCall({ id: 'c3', type: 'function', function: { name: 'send_invoice', arguments: JSON.stringify({ invoice_id: 'INV2-ABCD-1234' }) } }, { email: l2 });
   assert.match(sent.content, /SENT/);
 });
+
+test('loop F4: malformed invoice arguments are refused instead of crashing the policy', async () => {
+  const { captures } = await setup();
+  const state = createState(world, captures);
+  const email = cases.find((c) => c.id === 'L2').email;
+  const ctx = { state, email, scan: scanEmail(email) };
+  for (const args of [{ items: 'x', primary_recipients: 5 }, { items: [null, 7], primary_recipients: [null] }, {}]) {
+    assert.notEqual(evaluate('create_invoice', args, ctx).verdict, 'ALLOW');
+  }
+  for (const id of ['toString', '__proto__', 'constructor']) {
+    assert.equal(evaluate('send_invoice', { invoice_id: id, additional_recipients: 'evil@x.example' }, ctx).verdict, 'BLOCK');
+  }
+});
