@@ -476,7 +476,7 @@ app.get('/api/results', (req, res) => {
   res.type('json').send(fs.readFileSync(f, 'utf8'));
 });
 
-app.use((err, req, res, _next) => { if (!err.status) console.error(err); res.status(err.status || 500).json({ error: String(err.message || err).slice(0, 300) }); });
+app.use((err, req, res, _next) => { if (!err.status || err.status >= 500) console.error(err); res.status(err.status || 500).json({ error: String(err.message || err).slice(0, 300) }); });
 
 export { app, visitorKey };
 // Listen only when run directly (node server.js); tests import the app and listen on a free port.
