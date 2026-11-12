@@ -150,6 +150,34 @@
    "action": "attempt 2: per-IP replay limit, prune evicted replay approvals, wording",
    "outcome": "success",
    "verified": "APPROVE"
+  },
+  {
+   "round": 4,
+   "finding": "H1",
+   "action": "per-visitor real-outflow cap; simulated refunds not counted; approval reuses policy rule",
+   "outcome": "success",
+   "verified": "pending"
+  },
+  {
+   "round": 4,
+   "finding": "H2",
+   "action": "scripted agent moved to src/",
+   "outcome": "success",
+   "verified": "pending"
+  },
+  {
+   "round": 4,
+   "finding": "H3",
+   "action": "HTTP tests F4/F9/F10",
+   "outcome": "success",
+   "verified": "pending"
+  },
+  {
+   "round": 4,
+   "finding": "H4",
+   "action": "replay/simulated audit entries marked",
+   "outcome": "success",
+   "verified": "pending"
   }
  ]
 }
