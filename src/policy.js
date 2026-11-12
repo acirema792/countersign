@@ -77,7 +77,7 @@ function budgetRule(state, amount) {
 function accountCapRules(state, amount) {
   if (!state.account) return [];
   const after = round2(state.account.ledger.autoOutflow + amount);
-  return [rule('ACCOUNT_DAILY_CAP', 'HOLD', after <= state.account.cap, `Automatic outflows from this PayPal account today, across all users, would be $${after.toFixed(2)} of a $${state.account.cap} cap.`)];
+  return [rule('ACCOUNT_DAILY_CAP', 'HOLD', after <= state.account.cap, `Outflows from this PayPal account today (automatic and countersigned, across all users) would be $${after.toFixed(2)} of a $${state.account.cap} cap.`)];
 }
 
 function injectionRule(scan) {
@@ -335,10 +335,13 @@ export function reserve(tool, decision, state, { auto = true } = {}) {
     const inv = state.invoices[decision.exec?.invoice_id];
     if (inv) { const prev = inv.status; inv.status = 'sent'; undo.push(() => { inv.status = prev; }); }
   }
-  if (auto && MONEY_OUT_TOOLS.has(tool)) {
+  if (MONEY_OUT_TOOLS.has(tool)) {
     const amt = m.amount || 0;
-    state.ledger.autoOutflow = round2(state.ledger.autoOutflow + amt);
-    undo.push(() => { state.ledger.autoOutflow = round2(state.ledger.autoOutflow - amt); });
+    if (auto) {
+      state.ledger.autoOutflow = round2(state.ledger.autoOutflow + amt);
+      undo.push(() => { state.ledger.autoOutflow = round2(state.ledger.autoOutflow - amt); });
+    }
+    // The shared account cap counts every outflow, automatic or countersigned.
     const acct = state.account?.ledger;
     if (acct) { acct.autoOutflow = round2(acct.autoOutflow + amt); undo.push(() => { acct.autoOutflow = round2(acct.autoOutflow - amt); }); }
   }

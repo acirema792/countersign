@@ -314,3 +314,22 @@ test('loop G6: arguments the checks cannot read are blocked, not crashes', async
   const r = await runAgent({ state, email, llm, paypal: mock, mockPayPal: mock, guard: 'enforce', approvals: [], runId: 't', onEvent: () => {} });
   assert.ok(r);
 });
+
+test('loop G2: countersigned outflows count toward the shared account cap', async () => {
+  const { captures } = await setup();
+  const account = { ledger: { day: 'd', autoOutflow: 0 }, cap: 500 };
+  const st = createState(world, captures); st.account = account;
+  const email = cases.find((c) => c.id === 'A5').email;
+  const d = evaluate('pay_vendor', { payee_email: 'ap@lumenjars.example', amount: 300 }, { state: st, email, scan: scanEmail(email) });
+  assert.equal(d.verdict, 'HOLD');
+  reserve('pay_vendor', d, st, { auto: false }); // the owner countersigned it
+  assert.equal(st.ledger.autoOutflow, 0); // not the shop's automatic budget
+  assert.equal(account.ledger.autoOutflow, 300); // but the account cap sees it
+  const l3 = cases.find((c) => c.id === 'L3').email;
+  const next = evaluate('pay_vendor', { payee_email: 'billing@northwindwax.example', amount: 312.5, bill_id: 'NW-2207' }, { state: createState(world, captures), email: l3, scan: scanEmail(l3) });
+  const other = createState(world, captures); other.account = account;
+  const capped = evaluate('pay_vendor', { payee_email: 'billing@northwindwax.example', amount: 312.5, bill_id: 'NW-2207' }, { state: other, email: l3, scan: scanEmail(l3) });
+  assert.equal(next.verdict, 'ALLOW');
+  assert.equal(capped.verdict, 'HOLD');
+  assert.equal(capped.rules.find((r) => r.id === 'ACCOUNT_DAILY_CAP').ok, false);
+});

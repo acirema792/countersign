@@ -27,7 +27,7 @@ const RECORDED_DIR = path.join(DATA_DIR, 'recorded');
 
 // Each demo session (one visitor's shop) has its own $600/day automatic budget (DAILY_BUDGET).
 // The PayPal account behind all sessions also has a hard daily cap across everyone (ACCOUNT_DAILY_CAP),
-// so many visitors together still can't drain it.
+// counting automatic and countersigned outflows, so many visitors together still can't drain it.
 const ACCOUNT_DAILY_CAP = Number(process.env.ACCOUNT_DAILY_CAP || 10000);
 let accountLedger = newLedger();
 function ledgerForToday() {
@@ -232,6 +232,11 @@ app.post('/api/approvals/:id/:action(approve|reject)', async (req, res, next) =>
     const now = evaluate(ap.tool, ap.args, { state: s.state, email: ap.email, scan: scanEmail(ap.email) });
     const hard = now.rules.filter((r) => !r.ok && r.verdict === 'BLOCK');
     if (hard.length) return res.status(409).json({ error: `Cannot countersign: ${hard.map((r) => r.msg).join(' ')}` });
+    // The shared PayPal account's daily cap binds the owner too (the demo PIN is public).
+    const acct = s.state.account;
+    if (acct && ['create_refund', 'pay_vendor'].includes(ap.tool) && round2(acct.ledger.autoOutflow + (now.money?.amount || 0)) > acct.cap) {
+      return res.status(409).json({ error: `Cannot countersign: this PayPal account's $${acct.cap} daily cap (automatic and countersigned, across all users) would be exceeded.` });
+    }
     // Claim the approval and reserve in the books in the same tick: a double click cannot pay twice.
     ap.status = 'executing';
     const undo = reserve(ap.tool, now, s.state, { auto: false });
