@@ -89,3 +89,14 @@ test('server: without a model, a sample email opens its recorded run', async () 
   assert.equal(r.source, 'recorded');
   assert.ok(proposals(r).some((p) => p.status === 'held'));
 });
+
+test('server: gullible replays are rate limited and stale replay approvals are pruned', async () => {
+  delete process.env.SCRIPTED_LLM;
+  const v = visitor();
+  let last;
+  for (let i = 0; i < 31; i++) last = await v.run({ case_id: 'A5', guard: 'enforce', gullible: true }); // more than the 30/hour limit for this address
+  assert.equal(last.status, 'error');
+  assert.match(last.error, /Replay limit/);
+  const s = (await v.call('/api/session')).body;
+  assert.ok(s.approvals.filter((a) => a.simulated && a.status === 'pending').length <= 20);
+});

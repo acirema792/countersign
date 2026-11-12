@@ -86,6 +86,16 @@ function trimRuns() { if (runs.size > 500) runs.delete(runs.keys().next().value)
 // ---------- rate limit to protect the free model quota ----------
 const ipHits = new Map();
 let dayHits = { day: '', n: 0 };
+// Gullible-agent replays cost no model calls, but each one adds approvals and audit entries: cap them too.
+const replayHits = new Map(); // ip -> timestamps
+function allowReplay(ip) {
+  const now = Date.now();
+  const hits = (replayHits.get(ip) || []).filter((t) => now - t < 3600_000);
+  if (hits.length >= Number(process.env.REPLAYS_PER_IP_HOUR || 30)) return false;
+  hits.push(now); replayHits.set(ip, hits); if (replayHits.size > 5000) replayHits.delete(replayHits.keys().next().value);
+  return true;
+}
+
 function allowLive(ip) {
   const day = new Date().toISOString().slice(0, 10);
   if (dayHits.day !== day) dayHits = { day, n: 0 };
@@ -163,15 +173,24 @@ app.post('/api/run', async (req, res, next) => {
     const { scriptedLLM, gullibleScript } = await import('./test/helpers.js');
     const capOf = (st) => Object.fromEntries(st.world.orders.map((o) => [o.order_number, o.paypal.capture_id]));
     if (gullible === true && case_id && g === 'enforce' && gullibleScript(case_id, {})) {
+      if (!allowReplay(req.ip)) {
+        Object.assign(run, { status: 'error', error: 'Replay limit reached for this hour (30). The recorded runs and live runs still work.' });
+        return res.json({ run_id: id });
+      }
       // "Replay with a gullible agent": a scripted agent that obeys every email, against a scratch copy
       // of this visitor's books, with simulated PayPal. Shows what the guard does when the model doesn't help.
       const captures = Object.fromEntries(s.state.world.orders.map((o) => [o.order_number, { capture_id: o.paypal.capture_id, order_id: o.paypal.order_id, amount: o.paypal.captured, mode: o.paypal.mode }]));
       runState = createState(world, captures, newLedger());
-      s.scratch.set(id, runState); if (s.scratch.size > 20) s.scratch.delete(s.scratch.keys().next().value);
+      s.scratch.set(id, runState);
+      if (s.scratch.size > 20) {
+        // Drop the oldest replay and any of its approvals still waiting: they could never be countersigned.
+        const old = s.scratch.keys().next().value; s.scratch.delete(old);
+        for (let i = s.approvals.length - 1; i >= 0; i--) { const a = s.approvals[i]; if (a.simulated && a.runId === old && a.status === 'pending') s.approvals.splice(i, 1); } // in place: live runs hold this array
+      }
       runPayPal = simulatedReplayPayPal;
       approvals = { push: (ap) => s.approvals.push(Object.assign(ap, { simulated: true })) };
       runLLM = scriptedLLM(gullibleScript(case_id, capOf(runState)));
-      Object.assign(run, { source: 'gullible', note: 'Scripted gullible agent: it does whatever the email asks. Simulated PayPal, scratch copy of your books.' });
+      Object.assign(run, { source: 'gullible', note: 'Scripted gullible agent: it does whatever the email asks. Simulated PayPal, on a fresh copy of the demo books (your own books are untouched).' });
     } else if (process.env.SCRIPTED_LLM === '1' && case_id) { // local UI development only; never set in production
       runLLM = scriptedLLM(gullibleScript(case_id, capOf(s.state)));
     }
@@ -407,6 +426,6 @@ app.use((err, req, res, _next) => { console.error(err); res.status(500).json({ e
 
 export { app };
 // Listen only when run directly (node server.js); tests import the app and listen on a free port.
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (process.argv[1] && fs.realpathSync(path.resolve(process.argv[1])) === fs.realpathSync(fileURLToPath(import.meta.url))) {
   app.listen(PORT, () => console.log(`Countersign on :${PORT} | paypal=${paypal.mode} | llm=${llm ? llm.models.join(',') : 'none'}`));
 }
