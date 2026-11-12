@@ -14,7 +14,7 @@ No account, key or install needed. Everything runs in the PayPal **sandbox**; th
 3. Click **▶ Run agent with Countersign**. The same proposal is **HELD FOR OWNER**, with:
    - the provenance chip `requester ← email only` (the sender is not the customer on #1060);
    - the rules that fired: `REQUESTER_IS_CUSTOMER`, `AUTO_REFUND_LIMIT`.
-4. Also try **"Updated payment details - invoice NW-2207"** (a supplier "bank details changed" email): paying the new address is **BLOCKED** (`PAYEE_MATCHES_VENDOR_ON_FILE`), and even a payment to the address on file is held (`NO_PAYEE_CHANGE_IN_EMAIL`).
+4. Also try **"Updated payment details - invoice NW-2207"** (a supplier "bank details changed" email). The live model usually refuses this one by itself and flags it for the owner, so no card appears. Click **Replay with a gullible agent** to see what the guard does when the agent obeys: paying the new address is **BLOCKED** (`PAYEE_MATCHES_VENDOR_ON_FILE`). The replay uses a scripted agent, simulated PayPal and a scratch copy of the books, and works on every sample email.
 
 The model is not deterministic: a live run may differ from the recorded one. Each sample email has a recorded run behind "open the recorded run".
 
@@ -57,4 +57,4 @@ The model is not deterministic: a live run may differ from the recorded one. Eac
 | The benchmark | `data/cases.json` (expected outcomes), `src/eval.js` (scoring), `eval_results/latest.json`, `BENCHMARK-RESULTS.md` |
 | Execute exactly what was checked | `src/policy.js` builds `decision.exec`; `src/agent.js` `execute()` sends only that |
 | No double payment | `reserve()` in `src/policy.js` runs in the same tick as the verdict; approvals are claimed before the PayPal call; payouts use a deterministic `sender_batch_id` |
-| Offline tests (no keys needed) | `npm test`: 19 tests, including regressions for every finding of an independent audit |
+| Offline tests (no keys needed) | `npm test`: 26 tests, including regressions for every finding of an independent audit |

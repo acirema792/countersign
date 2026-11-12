@@ -50,13 +50,13 @@ The unguarded agent refunded a stranger $420 for someone else's order, refunded 
 - **Node.js + Express**, no front-end framework. Deployed on **Render**.
 - **PayPal Agent Toolkit** (`@paypal/agent-toolkit/openai`) supplies the agent's tool schemas and executes refunds and invoices. **PayPal Payouts** (REST) handles supplier payments, and **Orders v2** seeds the shop's orders as sandbox captures when the account supports card processing.
 - **Gemini 3.5 Flash-Lite** runs through its OpenAI-compatible endpoint, which accepts the toolkit's OpenAI-format tool schemas directly (we strip the JSON Schema keywords Gemini rejects). A free-tier pacer and per-model cooldowns keep the live demo inside the quota.
-- `src/policy.js` is the whole guard: no model calls, 28 rules.
+- `src/policy.js` is the whole guard: no model calls, 29 rules.
 - Reservations are made in the same tick as the verdict, so concurrent runs or double-clicked approvals can't pay twice, and payouts use deterministic `sender_batch_id`s.
 - An evaluation harness runs the case library on the live stack and publishes a results bundle, recorded runs that the UI can replay, and `BENCHMARK-RESULTS.md`.
 - **AI tools used:** Gemini at runtime. The project was designed, coded, tested, audited and documented with **Claude (Anthropic)** as an AI pair programmer.
 
 ## Challenges we ran into
-- **An independent audit pass** broke our first build. It found double payment under concurrent approvals, invoice terms (currency, discounts, negative quantities) that the guard checked but didn't enforce, and a spoofable From line. All of these are fixed and pinned by regression tests (14 offline tests).
+- **An independent audit pass** broke our first build. It found double payment under concurrent approvals, invoice terms (currency, discounts, negative quantities) that the guard checked but didn't enforce, and a spoofable From line. All of these are fixed and pinned by regression tests (26 offline tests).
 - **Free-tier model limits.** The full Flash models hit their daily cap mid-benchmark, so we rebuilt the client around Flash-Lite with pacing and fallbacks.
 - **Sandbox realities.** The new US sandbox account refuses card captures, and the Invoicing permission was still propagating, so refunds and invoices in the published run are **simulated and clearly labelled**. Payouts are real.
 

@@ -189,7 +189,7 @@ async function loadSession() {
 
   const modes = new Set(s.orders.map((o) => o.mode));
   $('#paypalMode').textContent = modes.has('sandbox') ? '· real PayPal sandbox captures' : '· simulated captures';
-  $('#paypalMode').title = s.seed_errors && s.seed_errors.length ? `Refunds run against simulated captures because the PayPal sandbox refused to create card captures: ${s.seed_errors[0]}. Invoices and supplier payouts still run in the real sandbox.` : '';
+  $('#paypalMode').title = s.seed_errors && s.seed_errors.length ? `Refunds run against simulated captures because the PayPal sandbox refused to create card captures: ${s.seed_errors[0]}. Supplier payouts still run in the real sandbox; invoices do once PayPal accepts the Invoicing permission.` : '';
   $('#orders').innerHTML = s.orders.map((o) => `<tr title="capture ${esc(o.capture_id)}"><td>#${o.order_number}</td><td>${esc(o.customer)}</td><td class="r">${money(o.total)}</td><td class="r">${o.refunded ? money(o.refunded) : '–'}</td></tr>`).join('');
   $('#bills').innerHTML = s.bills.map((b) => `<tr><td>${b.bill_id}</td><td>${esc(s.vendors.find((v) => v.id === b.vendor_id)?.name)}</td><td class="r">${money(b.amount)}</td><td>${b.status}</td></tr>`).join('');
   const pct = Math.min(100, (s.auto_outflow_today / s.policy.daily_auto_outflow_budget) * 100);
