@@ -110,12 +110,14 @@ import { PayPalAgentToolkit } from '@paypal/agent-toolkit/openai';
 import { guardToolkit, createState, loadWorld } from './src/index.js';
 
 const toolkit = new PayPalAgentToolkit({ clientId, clientSecret, configuration: { actions: { payments: { createRefund: true }, invoices: { create: true, send: true } }, context: { sandbox: true } } });
-const guarded = guardToolkit(toolkit, { state: createState(loadWorld()), onHold: (a) => notifyOwner(a) });
+// your books: orders with their PayPal captures (refunds are only allowed against these)
+const captures = { '1042': { capture_id: '3C679366HH908993F', amount: 48 } };
+const guarded = guardToolkit(toolkit, { state: createState(loadWorld(), captures), onHold: (a) => notifyOwner(a) });
 // give guarded.getTools() to your model; route every tool call through:
 const toolMessage = await guarded.handleToolCall(toolCall, { email });
 ```
 
-ALLOW runs the payload the policy rebuilt; HOLD and BLOCK return a tool message with the reasons, and nothing reaches PayPal.
+ALLOW runs the payload the policy rebuilt; HOLD and BLOCK return a tool message with the reasons, and nothing reaches PayPal. If PayPal refuses an allowed call (the toolkit reports errors as normal output), the wrapper returns `PAYPAL_ERROR` and releases the reservation, so the books and the daily budget stay accurate.
 
 ## Run it yourself
 

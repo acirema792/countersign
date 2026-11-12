@@ -2,7 +2,8 @@
 //
 //   import { PayPalAgentToolkit } from '@paypal/agent-toolkit/openai';
 //   import { guardToolkit, createState, loadWorld } from 'countersign';
-//   const guarded = guardToolkit(new PayPalAgentToolkit({...}), { state: createState(loadWorld()) });
+//   const guarded = guardToolkit(new PayPalAgentToolkit({...}), { state: createState(loadWorld(), captures) });
+//   // captures: { [order_number]: { capture_id, amount } } from your PayPal account (refunds need them)
 //   // pass guarded.getTools() to your model; for each tool call:
 //   const msg = await guarded.handleToolCall(toolCall, { email });   // same shape as the toolkit's
 //
@@ -10,6 +11,7 @@
 // message explaining why, and nothing reaches PayPal.
 import crypto from 'node:crypto';
 import { evaluate, reserve, recordResult, scanEmail, MONEY_TOOLS } from './policy.js';
+import { parseToolkitContent, isToolkitError, invoiceIdOf } from './paypal.js';
 
 export { evaluate, reserve, recordResult, scanEmail } from './policy.js';
 export { createState, loadWorld, loadCases, newLedger } from './state.js';
@@ -31,8 +33,10 @@ export function guardToolkit(toolkit, { state, onHold = () => {}, audit = null }
       const undo = reserve(name, decision, state);
       try {
         const out = await toolkit.handleToolCall({ ...toolCall, function: { name, arguments: JSON.stringify(decision.exec) } });
-        let parsed = {}; try { parsed = JSON.parse(out.content); } catch {}
-        recordResult(name, decision, state, { invoice_id: parsed.id });
+        const parsed = parseToolkitContent(out.content);
+        // PayPal refused: release the reservation so the books and the budget stay true.
+        if (isToolkitError(parsed)) { undo(); return reply({ status: 'PAYPAL_ERROR', detail: parsed }); }
+        recordResult(name, decision, state, { invoice_id: invoiceIdOf(parsed) });
         return out;
       } catch (e) { undo(); throw e; }
     }

@@ -211,3 +211,27 @@ test('loop F2: two partial refunds that add up to an unreturned full refund are 
   assert.equal(rest.verdict, 'HOLD');
   assert.equal(rest.rules.find((r) => r.id === 'RETURN_BEFORE_FULL_REFUND').ok, false);
 });
+
+test('loop F3: the library wrapper treats toolkit error payloads as failures and reads invoice ids from links', async () => {
+  const { guardToolkit } = await import('../src/index.js');
+  const { captures, cap } = await setup();
+  const state = createState(world, captures);
+  const l1 = cases.find((c) => c.id === 'L1').email;
+  const failing = { getTools: () => [], async handleToolCall(tc) { return { role: 'tool', tool_call_id: tc.id, content: JSON.stringify({ name: 'UNPROCESSABLE_ENTITY', message: 'The requested action could not be performed' }) }; } };
+  const g = guardToolkit(failing, { state });
+  const out = await g.handleToolCall({ id: 'c1', type: 'function', function: { name: 'create_refund', arguments: JSON.stringify({ capture_id: cap['1042'], amount: { currency_code: 'USD', value: '24.00' } }) } }, { email: l1 });
+  assert.match(out.content, /PAYPAL_ERROR/);
+  assert.equal(state.world.orders.find((o) => o.order_number === '1042').refunded, 0);
+  assert.equal(state.ledger.autoOutflow, 0);
+
+  const l2 = cases.find((c) => c.id === 'L2').email;
+  const invoicing = { getTools: () => [], async handleToolCall(tc) {
+    const body = tc.function.name === 'create_invoice' ? { rel: 'self', href: 'https://api-m.sandbox.paypal.com/v2/invoicing/invoices/INV2-ABCD-1234', method: 'GET' } : { status: 'SENT' };
+    return { role: 'tool', tool_call_id: tc.id, content: JSON.stringify(body) };
+  } };
+  const g2 = guardToolkit(invoicing, { state: createState(world, captures) });
+  const items = [{ name: 'Cedar & Smoke candle, 8 oz', quantity: '12', unit_amount: { currency_code: 'USD', value: '18.00' } }];
+  await g2.handleToolCall({ id: 'c2', type: 'function', function: { name: 'create_invoice', arguments: JSON.stringify({ primary_recipients: [{ billing_info: { email_address: 'orders@hazelrye.example' } }], items }) } }, { email: l2 });
+  const sent = await g2.handleToolCall({ id: 'c3', type: 'function', function: { name: 'send_invoice', arguments: JSON.stringify({ invoice_id: 'INV2-ABCD-1234' }) } }, { email: l2 });
+  assert.match(sent.content, /SENT/);
+});

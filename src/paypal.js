@@ -103,9 +103,8 @@ class SandboxPayPal {
 
   async _callToolkit(name, args) {
     const out = await this.toolkit.handleToolCall({ id: crypto.randomUUID(), type: 'function', function: { name, arguments: JSON.stringify(args) } });
-    let parsed; try { parsed = JSON.parse(out.content); } catch { parsed = { raw: out.content }; }
-    const failed = parsed && (parsed.error || parsed.ok === false || (Number(parsed.status) >= 400) || ['UNPROCESSABLE_ENTITY', 'INVALID_REQUEST', 'PERMISSION_DENIED', 'NOT_AUTHORIZED', 'RESOURCE_NOT_FOUND'].includes(parsed.name) || /error/i.test(parsed.raw || ''));
-    if (failed) {
+    const parsed = parseToolkitContent(out.content);
+    if (isToolkitError(parsed)) {
       const e = new Error(`PayPal ${name} failed: ${JSON.stringify(parsed).slice(0, 300)}`); e.body = parsed; throw e;
     }
     return parsed;
@@ -124,7 +123,7 @@ class SandboxPayPal {
     if (tool === 'pay_vendor') return this.payout(args);
     if (tool === 'create_invoice') {
       const r = await this.callToolkit('create_invoice', sanitizeInvoice(args));
-      const id = r.id || (r.href && r.href.split('/').pop()) || r.links?.[0]?.href?.split('/').pop();
+      const id = invoiceIdOf(r);
       if (!id) { const e = new Error(`PayPal create_invoice returned no invoice id: ${JSON.stringify(r).slice(0, 200)}`); e.body = r; throw e; }
       return { invoice_id: id, status: r.status || 'DRAFT', raw: r };
     }
@@ -173,4 +172,16 @@ export async function seedCaptures(paypal, world) {
     catch (e) { errors.push(`#${o.order_number}: ${e.message}`); }
   }
   return { captures: out, errors };
+}
+
+// The Agent Toolkit returns PayPal errors as ordinary tool output instead of throwing.
+export function parseToolkitContent(content) {
+  try { return JSON.parse(content); } catch { return { raw: content }; }
+}
+export function isToolkitError(parsed) {
+  return !!parsed && !!(parsed.error || parsed.ok === false || (Number(parsed.status) >= 400) || ['UNPROCESSABLE_ENTITY', 'INVALID_REQUEST', 'PERMISSION_DENIED', 'NOT_AUTHORIZED', 'RESOURCE_NOT_FOUND'].includes(parsed.name) || /error/i.test(parsed.raw || ''));
+}
+// create_invoice answers with a link to the new draft rather than an id.
+export function invoiceIdOf(r = {}) {
+  return r.id || (r.href && r.href.split('/').pop()) || r.links?.[0]?.href?.split('/').pop() || null;
 }
