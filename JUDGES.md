@@ -34,12 +34,13 @@ The model is not deterministic: a live run may differ from the recorded one. Eac
    $150 automatic limit, so it is **HELD FOR OWNER**.
 9. In the right-hand **Owner** panel, try **Countersign** with a wrong PIN first: the API refuses with "Only the owner can countersign".
    Then enter the demo PIN `2468`. The agent has no tool that reaches this endpoint, and double-clicking cannot pay twice.
+   Five wrong PINs lock that session (only that session) for 10 minutes. Because the demo PIN is public, countersigned payouts also count toward the per-visitor and account caps, and the last $1,000 of the account cap is kept for automatic payments.
 
 ## 4. Check the numbers and the receipts (1 min)
 
 10. **Measured results** tab: every case's expected outcome (written before the run) next to what happened, with and without Countersign.
-11. **Audit chain** tab: every decision and execution is SHA-256 hash-chained. `GET /api/audit/verify` re-verifies it.
-12. Try to break it: **+ Write your own** lets you write any email (including hidden HTML text) and run it.
+11. **Audit chain** tab: every decision and execution is SHA-256 hash-chained, with an Ed25519-signed head. `GET /api/audit/verify` re-verifies it. The log is shared by every visitor; replay and simulated entries are marked, and payees typed into "Write your own" emails are not recorded.
+12. Try to break it: **+ Write your own** lets you write any email (including hidden HTML text) and run it. Your runs are visible only to your own browser session.
 
 ## Where each claim lives in the code
 
@@ -49,12 +50,16 @@ The model is not deterministic: a live run may differ from the recorded one. Eac
 | Every verdict is deterministic | `src/policy.js` (no model calls in that file) |
 | Provenance: amounts/payees must come from the books, not the email | `src/policy.js` → `provenance()`, `AMOUNT_FROM_BOOKS`, `PAYEE_MATCHES_VENDOR_ON_FILE` |
 | Uses PayPal's official Agent Toolkit | `src/paypal.js` → `PayPalAgentToolkit` from `@paypal/agent-toolkit/openai` (refunds, invoices, orders) |
-| Real sandbox captures to refund against | `src/paypal.js` → `seedCapture()` (Orders v2 + sandbox test card) |
+| Sandbox captures to refund against (attempted at boot; the demo account refuses card captures, so refunds run against labelled simulated captures) | `src/paypal.js` → `seedCapture()` (Orders v2 + sandbox test card) |
 | Supplier payments via PayPal Payouts | `src/paypal.js` → `payout()` |
-| Only the owner can countersign | `server.js` → `POST /api/approvals/:id/approve` (owner PIN; re-checks hard BLOCK rules) |
+| Only the owner can countersign | `server.js` → `POST /api/approvals/:id/approve` (owner PIN with a per-session lockout; re-checks hard BLOCK rules and the caps) |
+| Gullible-agent replay never reaches PayPal | `server.js` run route (`gullible: true`): scripted agent from `src/scripted.js`, simulated PayPal, fresh demo books; `test/server.test.js` |
+| Per-visitor and account caps on real outflows | `src/policy.js` `ACCOUNT_DAILY_CAP`; `server.js` `visitorKey()`, `TRUST_PROXY_HOPS`, `GET /api/health?ip=` |
+| The library fails closed | `src/index.js` → `guardToolkit()` blocks toolkit tools it doesn't guard |
 | Baseline executes nothing | `src/agent.js` → `guard === 'off'` branch uses the mock executor |
 | Hash-chained receipts | `src/audit.js` |
 | The benchmark | `data/cases.json` (expected outcomes), `src/eval.js` (scoring), `eval_results/latest.json`, `BENCHMARK-RESULTS.md` |
 | Execute exactly what was checked | `src/policy.js` builds `decision.exec`; `src/agent.js` `execute()` sends only that |
 | No double payment | `reserve()` in `src/policy.js` runs in the same tick as the verdict; approvals are claimed before the PayPal call; payouts use a deterministic `sender_batch_id` |
-| Offline tests (no keys needed) | `npm test`: 40 tests, including regressions for every finding of an independent audit |
+| Offline tests (no keys needed) | `npm test`: 40 tests (policy, library and HTTP), including regressions for the code findings of six audit rounds (`loop/audits/`) |
+| Later changes leave the published results unchanged | `node loop/tripwire.js` replays every recorded guarded decision through the current rules |

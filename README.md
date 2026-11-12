@@ -102,6 +102,8 @@ Also used: **Google Gemini 3.5 Flash-Lite** (falls back to 3.1 Flash-Lite) throu
 - **The baseline never executes.** The unguarded arm records what the agent would have done; it is never sent to PayPal.
 - **Free hosting.** The Render free instance sleeps when idle (first request can take up to ~50 s). Demo sessions live in memory and reset on restart. Recorded runs are replayed if the live model quota is exhausted, and are labelled as recorded.
 - **Heuristics are narrow on purpose.** The hidden-instruction scanner is a few regexes; it only escalates to HOLD. The safety comes from provenance, not from detecting attacks.
+- **The demo PIN is public.** Anyone can countersign in the demo, so countersigned payouts are bounded by the per-visitor ($1,500/day) and account ($10,000/day) caps instead. Those caps key on the client address: someone with many addresses gets one allowance each, and the account cap still bounds the total.
+- **Shared receipt log.** The Audit chain tab shows every visitor's decisions (custom-email payees are not recorded). Runs themselves are private to the browser session.
 
 ## AI tools used
 
