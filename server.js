@@ -37,6 +37,15 @@ const accountDailyCap = () => Number(process.env.ACCOUNT_DAILY_CAP || 10000); //
 // so one visitor with the public demo PIN can't use up the account for everyone else.
 const visitorDailyCap = () => Number(process.env.VISITOR_DAILY_CAP || 1500);
 const visitorLedgers = new Map(); // ip -> { day, outflow }
+// One visitor = one IPv4 address, or one IPv6 /64 (a single home or phone usually gets a whole /64).
+function visitorKey(ip = '') {
+  const a = String(ip).replace(/%.*$/, '').replace(/^::ffff:(?=\d+\.)/i, '');
+  if (!a.includes(':')) return a;
+  const [head, tail = ''] = a.toLowerCase().split('::');
+  const h = head ? head.split(':') : []; const t = tail ? tail.split(':') : [];
+  const full = [...h, ...Array(Math.max(0, 8 - h.length - t.length)).fill('0'), ...t];
+  return full.slice(0, 4).map((x) => x.replace(/^0+(?=.)/, '')).join(':') + '::/64';
+}
 function visitorLedger(ip) {
   const day = new Date().toISOString().slice(0, 10);
   let v = visitorLedgers.get(ip);
@@ -86,7 +95,7 @@ async function getSession(req) {
   s.touched = Date.now();
   const today = ledgerForToday();
   if (s.state.ledger.day !== today.day) s.state.ledger = newLedger();
-  s.state.account = { ledger: today, cap: accountDailyCap(), visitor: visitorLedger(req.ip), visitorCap: visitorDailyCap() };
+  s.state.account = { ledger: today, cap: accountDailyCap(), visitor: visitorLedger(visitorKey(req.ip)), visitorCap: visitorDailyCap() };
   return s;
 }
 
@@ -132,6 +141,7 @@ function sessionView(s) {
     bills: st.world.open_bills,
     invoices: st.invoices,
     auto_outflow_today: st.ledger.autoOutflow,
+    account_outflow_today: st.account ? st.account.ledger.autoOutflow : 0, // real outflows from the shared PayPal account today
     approvals: s.approvals.slice().reverse(),
     runs: s.runs.slice(-30).reverse().map((id) => { const r = runs.get(id); return r && { id, label: r.label, title: r.title, status: r.status, guard: r.guard, source: r.source }; }).filter(Boolean),
     seed_errors: s.seedErrors
@@ -191,7 +201,7 @@ app.post('/api/run', async (req, res, next) => {
     const { scriptedLLM, gullibleScript } = await import('./src/scripted.js');
     const capOf = (st) => Object.fromEntries(st.world.orders.map((o) => [o.order_number, o.paypal.capture_id]));
     if (gullible === true && case_id && g === 'enforce' && gullibleScript(case_id, {})) {
-      if (!allowReplay(req.ip)) {
+      if (!allowReplay(visitorKey(req.ip))) {
         Object.assign(run, { status: 'error', error: `Replay limit reached for this hour (${Number(process.env.REPLAYS_PER_IP_HOUR || 30)}). The recorded runs and live runs still work.` });
         return res.json({ run_id: id });
       }
@@ -214,7 +224,7 @@ app.post('/api/run', async (req, res, next) => {
       const steps = process.env.SCRIPTED_STEPS ? JSON.parse(process.env.SCRIPTED_STEPS) : gullibleScript(case_id, capOf(s.state));
       runLLM = scriptedLLM(steps, { failAfter: process.env.SCRIPTED_FAIL_AFTER === '1' });
     }
-    const live = runLLM && (runLLM !== llm || allowLive(req.ip));
+    const live = runLLM && (runLLM !== llm || allowLive(visitorKey(req.ip)));
     if (!live) {
       const rec = case_id && recordedFor(case_id);
       if (!rec) {
@@ -301,6 +311,13 @@ app.post('/api/approvals/:id/:action(approve|reject)', async (req, res, next) =>
     // no account, and simulated refunds don't count, so the rule is simply absent for them.
     const capRule = now.rules.find((r) => r.id === 'ACCOUNT_DAILY_CAP' && !r.ok);
     if (capRule) return res.status(409).json({ error: `Cannot countersign: ${capRule.msg}` });
+    // Keep the last part of the account's daily cap for automatic payments, so countersigned payouts
+    // (with the public demo PIN) can't crowd out the next visitor's routine supplier payment.
+    const headroom = Number(process.env.COUNTERSIGN_HEADROOM || 1000);
+    const acctNow = st.account;
+    if (acctNow && now.rules.some((r) => r.id === 'ACCOUNT_DAILY_CAP') && round2(acctNow.ledger.autoOutflow + (now.money?.amount || 0)) > acctNow.cap - headroom) {
+      return res.status(409).json({ error: `Cannot countersign: the last $${headroom} of this PayPal account's $${acctNow.cap} daily cap is kept for automatic payments.` });
+    }
     // Claim the approval and reserve in the books in the same tick: a double click cannot pay twice.
     ap.status = 'executing';
     const undo = reserve(ap.tool, now, st, { auto: false });
@@ -449,7 +466,7 @@ app.get('/api/results', (req, res) => {
 
 app.use((err, req, res, _next) => { console.error(err); res.status(500).json({ error: String(err.message || err).slice(0, 300) }); });
 
-export { app };
+export { app, visitorKey };
 // Listen only when run directly (node server.js); tests import the app and listen on a free port.
 if (process.argv[1] && fs.realpathSync(path.resolve(process.argv[1])) === fs.realpathSync(fileURLToPath(import.meta.url))) {
   app.listen(PORT, () => console.log(`Countersign on :${PORT} | paypal=${paypal.mode} | llm=${llm ? llm.models.join(',') : 'none'}`));
