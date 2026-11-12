@@ -193,3 +193,12 @@ test('server: /api/health reports whether the client address looks public (proxy
   assert.equal((await visitor('6.6.6.6, 203.0.113.7').call('/api/health?ip=203.0.113.7')).body.client_ip_matches, true); // forged entry ignored
   assert.equal((await visitor('6.6.6.6, 203.0.113.7').call('/api/health?ip=6.6.6.6')).body.client_ip_matches, false);
 });
+
+test('server: a run is readable only by the session that started it (J1)', async () => {
+  const owner = visitor(); const other = visitor();
+  const { body: { run_id } } = await owner.call('/api/run', { email: { from: 'me@example.com', subject: 'private', body: 'my private note' } });
+  assert.equal((await owner.call(`/api/runs/${run_id}`)).status, 200);
+  const peek = await other.call(`/api/runs/${run_id}`);
+  assert.equal(peek.status, 404);
+  assert.ok(!JSON.stringify(peek.body).includes('my private note'));
+});

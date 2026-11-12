@@ -184,7 +184,7 @@ app.post('/api/run', async (req, res, next) => {
     const g = guard === 'off' ? 'off' : 'enforce';
     const id = crypto.randomUUID().slice(0, 8);
     const run = { id, label, title, guard: g, email, status: 'running', events: [], started: Date.now(), source: 'live' };
-    runs.set(id, run); trimRuns(); s.runs.push(id);
+    runs.set(id, run); trimRuns(); s.runs.push(id); if (s.runs.length > 200) s.runs.shift();
 
     let runLLM = llm;
     let runState = s.state; let runPayPal = paypal; let approvals = s.approvals;
@@ -245,10 +245,14 @@ app.post('/api/run', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-app.get('/api/runs/:id', (req, res) => {
-  const r = runs.get(req.params.id);
-  if (!r) return res.status(404).json({ error: 'Run not found (the server may have restarted).' });
-  res.json(r);
+app.get('/api/runs/:id', async (req, res, next) => {
+  try {
+    // A run (and the email it read) is visible only to the browser session that started it.
+    const s = await getSession(req);
+    const r = s.runs.includes(req.params.id) ? runs.get(req.params.id) : null;
+    if (!r) return res.status(404).json({ error: 'Run not found (the server may have restarted).' });
+    res.json(r);
+  } catch (e) { next(e); }
 });
 
 app.get('/api/recorded/:caseId', (req, res) => {
