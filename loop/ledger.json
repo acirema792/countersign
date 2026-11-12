@@ -155,29 +155,45 @@
    "round": 4,
    "finding": "H1",
    "action": "per-visitor real-outflow cap; simulated refunds not counted; approval reuses policy rule",
-   "outcome": "success",
-   "verified": "pending"
+   "outcome": "failure",
+   "verified": "REJECT",
+   "error": "server wiring untested; proxy-hop deploy risk"
   },
   {
    "round": 4,
    "finding": "H2",
    "action": "scripted agent moved to src/",
    "outcome": "success",
-   "verified": "pending"
+   "verified": "APPROVE"
   },
   {
    "round": 4,
    "finding": "H3",
    "action": "HTTP tests F4/F9/F10",
    "outcome": "success",
-   "verified": "pending"
+   "verified": "APPROVE"
   },
   {
    "round": 4,
    "finding": "H4",
    "action": "replay/simulated audit entries marked",
    "outcome": "success",
-   "verified": "pending"
+   "verified": "APPROVE"
+  },
+  {
+   "round": 4,
+   "finding": "H1",
+   "action": "attempt 2: HTTP test across sessions/addresses; TRUST_PROXY_HOPS; health client_ip self-check",
+   "outcome": "failure",
+   "verified": "REJECT",
+   "error": "forged XFF / leftmost-key mutations survived; public reading not proof"
+  },
+  {
+   "round": 4,
+   "finding": "H1",
+   "action": "attempt 3: forged-XFF test; /api/health?ip= client_ip_matches; README",
+   "outcome": "success",
+   "verified": "APPROVE"
   }
  ]
 }
