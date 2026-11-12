@@ -124,6 +124,10 @@ const toolMessage = await guarded.handleToolCall(toolCall, { email });
 
 Pass the email with `auth: 'pass'` only when your mail system verified the sender (SPF/DKIM/DMARC); unauthenticated requests for refunds and vendor payments are held for the owner. ALLOW runs the payload the policy rebuilt; HOLD and BLOCK return a tool message with the reasons, and nothing reaches PayPal. If PayPal refuses an allowed call (the toolkit reports errors as normal output), the wrapper returns `PAYPAL_ERROR` and releases the reservation, so the books and the daily budget stay accurate.
 
+## Deploying behind a proxy
+
+Rate limits and the per-visitor cap key on the client address. Behind one proxy hop (Render) the default works; if your platform adds more, set `TRUST_PROXY_HOPS`. `GET /api/health` reports `client_ip: "public"` when the server sees real visitor addresses, and `"private"` when it is seeing a proxy instead (raise `TRUST_PROXY_HOPS`).
+
 ## Changes since the published run
 
 An audit loop (fresh auditor → one minimal fix each → separate verifier that re-runs the tests) found and fixed these after run `eval-2026-11-11T21-53-40-928Z`:
@@ -144,7 +148,7 @@ None of this changes the published results: `node loop/tripwire.js` replays ever
 
 ```bash
 npm install
-npm test                  # 32 tests, offline: the whole case library through a scripted, maximally gullible agent
+npm test                  # 34 tests, offline: the whole case library through a scripted, maximally gullible agent
 PAYPAL_CLIENT_ID=... PAYPAL_CLIENT_SECRET=... GEMINI_API_KEY=... npm start
 # open http://localhost:3000
 ```

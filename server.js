@@ -32,10 +32,10 @@ const RECORDED_DIR = path.join(DATA_DIR, 'recorded');
 // Each demo session (one visitor's shop) has its own $600/day automatic budget (DAILY_BUDGET).
 // The PayPal account behind all sessions also has a hard daily cap across everyone (ACCOUNT_DAILY_CAP),
 // counting automatic and countersigned outflows, so many visitors together still can't drain it.
-const ACCOUNT_DAILY_CAP = Number(process.env.ACCOUNT_DAILY_CAP || 10000);
+const accountDailyCap = () => Number(process.env.ACCOUNT_DAILY_CAP || 10000); // read per request
 // And each visitor (client address) has its own cap on REAL outflows, automatic and countersigned,
 // so one visitor with the public demo PIN can't use up the account for everyone else.
-const VISITOR_DAILY_CAP = Number(process.env.VISITOR_DAILY_CAP || 1500);
+const visitorDailyCap = () => Number(process.env.VISITOR_DAILY_CAP || 1500);
 const visitorLedgers = new Map(); // ip -> { day, outflow }
 function visitorLedger(ip) {
   const day = new Date().toISOString().slice(0, 10);
@@ -86,7 +86,7 @@ async function getSession(req) {
   s.touched = Date.now();
   const today = ledgerForToday();
   if (s.state.ledger.day !== today.day) s.state.ledger = newLedger();
-  s.state.account = { ledger: today, cap: ACCOUNT_DAILY_CAP, visitor: visitorLedger(req.ip), visitorCap: VISITOR_DAILY_CAP };
+  s.state.account = { ledger: today, cap: accountDailyCap(), visitor: visitorLedger(req.ip), visitorCap: visitorDailyCap() };
   return s;
 }
 
@@ -140,12 +140,16 @@ function sessionView(s) {
 
 // ---------- app ----------
 const app = express();
-app.set('trust proxy', 1); // Render terminates TLS in front of us: rate-limit by the real client IP
+// Render terminates TLS in front of us: rate limits and the per-visitor cap key on the real client IP.
+// If the platform adds more proxy hops, set TRUST_PROXY_HOPS; /api/health reports whether req.ip looks public.
+app.set('trust proxy', Number(process.env.TRUST_PROXY_HOPS || 1));
+const isPrivateIp = (ip = '') => /^(::ffff:)?(10\.|127\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.)|^::1$|^f[cd][0-9a-f]{2}:|^fe80:/i.test(ip);
 app.use(express.json({ limit: '100kb' }));
 app.use(express.static(path.join(here, 'public'), { setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache') }));
 
 app.get('/api/health', (req, res) => {
-  res.json({ ok: true, version: VERSION, paypal_mode: paypal.mode, llm: llm ? { provider: llm.provider, models: llm.models, status: llm.status() } : null, cases: cases.length, audit_entries: audit.entries.length });
+  // client_ip: 'public' means per-visitor limits see real visitors; 'private' means TRUST_PROXY_HOPS needs raising.
+  res.json({ ok: true, version: VERSION, paypal_mode: paypal.mode, llm: llm ? { provider: llm.provider, models: llm.models, status: llm.status() } : null, cases: cases.length, audit_entries: audit.entries.length, client_ip: isPrivateIp(req.ip) ? 'private' : 'public' });
 });
 
 app.get('/api/inbox', (req, res) => {
@@ -184,7 +188,7 @@ app.post('/api/run', async (req, res, next) => {
     const capOf = (st) => Object.fromEntries(st.world.orders.map((o) => [o.order_number, o.paypal.capture_id]));
     if (gullible === true && case_id && g === 'enforce' && gullibleScript(case_id, {})) {
       if (!allowReplay(req.ip)) {
-        Object.assign(run, { status: 'error', error: 'Replay limit reached for this hour (30). The recorded runs and live runs still work.' });
+        Object.assign(run, { status: 'error', error: `Replay limit reached for this hour (${Number(process.env.REPLAYS_PER_IP_HOUR || 30)}). The recorded runs and live runs still work.` });
         return res.json({ run_id: id });
       }
       // "Replay with a gullible agent": a scripted agent that obeys every email, against a scratch copy
@@ -285,7 +289,6 @@ app.post('/api/approvals/:id/:action(approve|reject)', async (req, res, next) =>
     const now = evaluate(ap.tool, ap.args, { state: st, email: ap.email, scan: scanEmail(ap.email) });
     const hard = now.rules.filter((r) => !r.ok && r.verdict === 'BLOCK');
     if (hard.length) return res.status(409).json({ error: `Cannot countersign: ${hard.map((r) => r.msg).join(' ')}` });
-    // The shared PayPal account's daily cap binds the owner too (the demo PIN is public).
     // The account and per-visitor caps bind the owner too (the demo PIN is public). Scratch replay books have
     // no account, and simulated refunds don't count, so the rule is simply absent for them.
     const capRule = now.rules.find((r) => r.id === 'ACCOUNT_DAILY_CAP' && !r.ok);

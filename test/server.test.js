@@ -13,10 +13,11 @@ const base = `http://127.0.0.1:${server.address().port}`;
 test.after(() => server.close());
 
 let n = 0;
-const visitor = () => {
+const visitor = (ip) => {
   const sid = `test-session-${process.pid}-${++n}`;
+  const headers = { 'content-type': 'application/json', 'x-session': sid, ...(ip ? { 'x-forwarded-for': ip } : {}) }; // as Render's proxy would set it
   const call = async (path, body) => {
-    const r = await fetch(base + path, { method: body ? 'POST' : 'GET', headers: { 'content-type': 'application/json', 'x-session': sid }, body: body ? JSON.stringify(body) : undefined });
+    const r = await fetch(base + path, { method: body ? 'POST' : 'GET', headers, body: body ? JSON.stringify(body) : undefined });
     return { status: r.status, body: await r.json() };
   };
   const run = async (body) => {
@@ -154,4 +155,34 @@ test('server: replay entries in the shared receipt log are marked simulated (H4)
   assert.ok(mine.length > 0);
   assert.ok(mine.every((e) => e.simulated === 'gullible-agent replay'));
   assert.equal(body.verify.ok, true);
+});
+
+test('server: the per-visitor cap follows the client address across sessions; other visitors are unaffected (H1)', async () => {
+  process.env.SCRIPTED_LLM = '1';
+  process.env.ACCOUNT_DAILY_CAP = '100000'; process.env.VISITOR_DAILY_CAP = '1500'; // isolate the visitor cap
+  const bigPayout = JSON.stringify([['pay_vendor', { payee_email: 'ap@lumenjars.example', amount: 1400 }]]);
+  try {
+    const big = async (v) => {
+      process.env.SCRIPTED_STEPS = bigPayout;
+      try { await v.run({ case_id: 'A5' }); } finally { delete process.env.SCRIPTED_STEPS; }
+      const ap = await v.pending();
+      return v.call(`/api/approvals/${ap.id}/approve`, { pin: '2468' });
+    };
+    const A = '203.0.113.7'; const B = '198.51.100.9';
+    assert.equal((await big(visitor(A))).status, 200); // $1,400 countersigned for visitor A
+    const again = await big(visitor(A)); // a NEW session from the same address
+    assert.equal(again.status, 409);
+    assert.match(again.body.error, /per-visitor cap/);
+    const auto = proposals(await visitor(A).run({ case_id: 'L3' }))[0]; // the automatic path is capped too
+    assert.equal(auto.status, 'held');
+    assert.ok(auto.decision.rules.some((r) => r.id === 'ACCOUNT_DAILY_CAP' && !r.ok));
+    assert.equal(proposals(await visitor(B).run({ case_id: 'L3' }))[0].status, 'executed'); // visitor B is unaffected
+  } finally { delete process.env.ACCOUNT_DAILY_CAP; delete process.env.VISITOR_DAILY_CAP; process.env.ACCOUNT_DAILY_CAP = '700'; }
+});
+
+test('server: /api/health reports whether the client address looks public (proxy hop check)', async () => {
+  const { body: local } = await visitor().call('/api/health');
+  assert.equal(local.client_ip, 'private'); // a direct local connection
+  const { body: viaProxy } = await visitor('203.0.113.7').call('/api/health');
+  assert.equal(viaProxy.client_ip, 'public');
 });
