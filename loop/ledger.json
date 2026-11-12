@@ -99,49 +99,57 @@
    "finding": "G3",
    "action": "REQUESTER_IS_VENDOR fails closed on empty From",
    "outcome": "success",
-   "verified": "pending"
+   "verified": "APPROVE"
   },
   {
    "round": 3,
    "finding": "G1",
    "action": "library fails closed for unguarded toolkit tools",
    "outcome": "success",
-   "verified": "pending"
+   "verified": "APPROVE"
   },
   {
    "round": 3,
    "finding": "G6",
    "action": "malformed args normalised/BLOCKED (ARGS_WELL_FORMED)",
    "outcome": "success",
-   "verified": "pending"
+   "verified": "APPROVE"
   },
   {
    "round": 3,
    "finding": "G2",
    "action": "account cap counts countersigned outflows; approval refused past cap",
    "outcome": "success",
-   "verified": "pending"
+   "verified": "APPROVE"
   },
   {
    "round": 3,
    "finding": "G4",
    "action": "gullible-agent replay button (scratch books, simulated PayPal)",
-   "outcome": "success",
-   "verified": "pending"
+   "outcome": "failure",
+   "verified": "REJECT",
+   "error": "replays unthrottled: one client can exhaust server memory"
   },
   {
    "round": 3,
    "finding": "G5",
    "action": "HTTP tests for server",
    "outcome": "success",
-   "verified": "pending"
+   "verified": "APPROVE"
   },
   {
    "round": 3,
    "finding": "G7",
    "action": "doc fixes + JUDGES step 4",
    "outcome": "success",
-   "verified": "pending"
+   "verified": "APPROVE"
+  },
+  {
+   "round": 3,
+   "finding": "G4",
+   "action": "attempt 2: per-IP replay limit, prune evicted replay approvals, wording",
+   "outcome": "success",
+   "verified": "APPROVE"
   }
  ]
 }
