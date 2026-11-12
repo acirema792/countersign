@@ -229,6 +229,27 @@
    "action": "per-visitor new-session limit (verifier-flagged pre-existing risk)",
    "outcome": "success",
    "verified": "APPROVE"
+  },
+  {
+   "round": 6,
+   "finding": "K1",
+   "action": "custom-email payees redacted in shared log",
+   "outcome": "success",
+   "verified": "APPROVE"
+  },
+  {
+   "round": 6,
+   "finding": "K2",
+   "action": "idle-only eviction",
+   "outcome": "success",
+   "verified": "APPROVE"
+  },
+  {
+   "round": 6,
+   "finding": "K3",
+   "action": "caps shown in owner panel",
+   "outcome": "success",
+   "verified": "APPROVE"
   }
  ]
 }

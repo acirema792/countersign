@@ -5,3 +5,4 @@
 {"round":3,"score":7.7,"trajectory":"7.1->7.3->7.7","found":4,"escalated":4,"outcome":"stopped-max-rounds"}
 {"round":4,"found":4,"fixed":4,"rejected_then_fixed":"H1 x2","tests":"34/34","tripwire":"12/12","live":"TRUST_PROXY_HOPS=3 verified; L3 live sandbox payout executed","outcome":"fixes-merged-deployed"}
 {"round":5,"found":5,"fixed":5,"tests":"38/38","tripwire":"12/12","outcome":"fixes-merged"}
+{"round":6,"found":3,"fixed":3,"tests":"40/40","tripwire":"12/12","outcome":"fixes-merged; loop stopped (plateau, no open findings)"}

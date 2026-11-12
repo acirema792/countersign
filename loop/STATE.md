@@ -7,14 +7,15 @@
 ## Scores
 | Round | OVERALL_SCORE | Fixed | Rejected | Escalated |
 |---|---|---|---|---|
-| 5 | (fixes for round-4 findings J1-J5) | 5 | 0 | 0 |
+| 6 | (fixes for round-5 findings K1-K3) | 3 | 0 | 0 |
+| 5 | 7.9 (after J1-J5) — plateau; owner asked to fix everything | 5 | 0 | 0 |
 | 4 | 7.8 (after H1-H4) | 4 (H1-H4) | H1 twice, then approved | 0 |
 | 3 | 7.7 (after G1-G7) — stop: max rounds (3) | 7 (G1-G7) | 1 then corrected (G4) | 0 |
 | 2 | 7.3 | – | – | stop: plateau (+0.2 < 0.3 over 2 rounds); owner chose to fix all G1-G7 |
 | 1 | 7.1 (before fixes) | 10 (F1-F10, docs) | 3 then corrected (F8, F9, docs) | 2 (F1, F5: owner approved both) |
 
 ## Open findings
-- none: J1-J5 fixed and verified in round 5. Known limit: an attacker with many IPs (or /64s) gets one allowance per address; the $10,000 account cap and $1,000 automatic headroom still bound the total.
+- none. Score trajectory 7.1 → 7.3 → 7.7 → 7.8 → 7.9; the remaining gap is Potential Impact (7.1) and Innovation (7.2), which code fixes don't move.
 
 ## Escalations (owner decides)
 - F1 resolved by owner: per-visitor budget + account cap (default $10,000, env ACCOUNT_DAILY_CAP).
