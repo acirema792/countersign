@@ -7,7 +7,11 @@
 ## Scores
 | Round | OVERALL_SCORE | Fixed | Rejected | Escalated |
 |---|---|---|---|---|
+| 1 | 7.1 (before fixes) | 10 (F1-F10, docs) | 3 then corrected (F8, F9, docs) | 2 (F1, F5: owner approved both) |
 
 ## Open findings
 
 ## Escalations (owner decides)
+- F1 resolved by owner: per-visitor budget + account cap (default $10,000, env ACCOUNT_DAILY_CAP).
+- F5 resolved by owner: REQUESTER_IS_VENDOR added.
+- Note: BENCHMARK-RESULTS.md:54 (protected) describes the pre-loop budget fix historically; README 'Changes since the published run' covers the update.
