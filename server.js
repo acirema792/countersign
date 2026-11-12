@@ -405,4 +405,8 @@ app.get('/api/results', (req, res) => {
 
 app.use((err, req, res, _next) => { console.error(err); res.status(500).json({ error: String(err.message || err).slice(0, 300) }); });
 
-app.listen(PORT, () => console.log(`Countersign on :${PORT} | paypal=${paypal.mode} | llm=${llm ? llm.models.join(',') : 'none'}`));
+export { app };
+// Listen only when run directly (node server.js); tests import the app and listen on a free port.
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  app.listen(PORT, () => console.log(`Countersign on :${PORT} | paypal=${paypal.mode} | llm=${llm ? llm.models.join(',') : 'none'}`));
+}
