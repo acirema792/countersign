@@ -130,10 +130,11 @@ function evalRefund(args, ctx) {
   prov.push({ field: 'requester', value: sender, source: isCustomer ? 'books' : 'email-only', note: isCustomer ? `authenticated sender is the customer on #${order.order_number}` : sameAddress ? 'the From line matches, but the message is not authenticated (could be spoofed)' : `customer on #${order.order_number} is ${cust ? cust.email : 'unknown'}` });
   rules.push(rule('REQUESTER_IS_CUSTOMER', 'HOLD', !!isCustomer, isCustomer ? 'The request comes from the customer who placed the order (sender authenticated).' : sameAddress ? 'The From line names the customer, but the email is not authenticated, so it could be spoofed.' : `The sender is not the customer on order #${order.order_number}.`));
 
-  const fullRefund = sameMoney(amount, order.total);
+  // Count earlier refunds too, so two partial refunds can't add up to an unreturned full refund.
+  const fullRefund = sameMoney(round2(order.refunded + amount), order.total);
   const delivered = order.status === 'delivered';
   rules.push(rule('RETURN_BEFORE_FULL_REFUND', 'HOLD', !(fullRefund && delivered),
-    fullRefund && delivered ? `A full refund of a delivered order (#${order.order_number}) needs the owner: no return is recorded.` : delivered ? 'Partial refund of a delivered order.' : `Order #${order.order_number} has not shipped.`));
+    fullRefund && delivered ? `A full refund of a delivered order (#${order.order_number})${order.refunded > 0 ? `, counting $${order.refunded.toFixed(2)} already refunded,` : ''} needs the owner: no return is recorded.` : delivered ? 'Partial refund of a delivered order.' : `Order #${order.order_number} has not shipped.`));
 
   const lim = state.world.policy.auto_refund_limit;
   rules.push(rule('AUTO_REFUND_LIMIT', 'HOLD', amount <= lim, `Refund $${amount.toFixed(2)} vs automatic limit $${lim}.`));

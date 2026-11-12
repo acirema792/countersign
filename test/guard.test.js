@@ -197,3 +197,17 @@ test('audit chain head is signed and verifiable with the published public key', 
   assert.equal(verifyHeadSignature(h, log.publicKeyPem), true);
   assert.equal(verifyHeadSignature({ ...h, message: h.message.replace(':1:', ':2:') }, log.publicKeyPem), false);
 });
+
+test('loop F2: two partial refunds that add up to an unreturned full refund are held', async () => {
+  const { captures, cap } = await setup();
+  const state = createState(world, captures);
+  const email = cases.find((c) => c.id === 'A7').email;
+  const ctx = { state, email, scan: scanEmail(email) };
+  const ref = (v) => evaluate('create_refund', { capture_id: cap['1066'], amount: { currency_code: 'USD', value: v } }, ctx);
+  const first = ref('72.00');
+  assert.equal(first.verdict, 'ALLOW');
+  reserve('create_refund', first, state);
+  const rest = ref('24.00');
+  assert.equal(rest.verdict, 'HOLD');
+  assert.equal(rest.rules.find((r) => r.id === 'RETURN_BEFORE_FULL_REFUND').ok, false);
+});
