@@ -201,16 +201,16 @@ app.get('/api/recorded/:caseId', (req, res) => {
   res.json(r);
 });
 
-// Owner PIN: constant-time compare, and 5 wrong tries per address lock it for 10 minutes.
-const pinFails = new Map(); // ip -> { n, until }
-function pinCheck(ip, given) {
-  const f = pinFails.get(ip) || { n: 0, until: 0 };
+// Owner PIN: constant-time compare, and 5 wrong tries in one session lock that session for 10 minutes.
+const pinFails = new Map(); // key -> { n, until }
+function pinCheck(key, given) {
+  const f = pinFails.get(key) || { n: 0, until: 0 };
   if (f.until > Date.now()) return 'locked';
   const a = crypto.createHash('sha256').update(String(given ?? '')).digest();
   const b = crypto.createHash('sha256').update(OWNER_PIN).digest();
-  if (crypto.timingSafeEqual(a, b)) { pinFails.delete(ip); return 'ok'; }
+  if (crypto.timingSafeEqual(a, b)) { pinFails.delete(key); return 'ok'; }
   f.n += 1; if (f.n >= 5) { f.n = 0; f.until = Date.now() + 10 * 60_000; }
-  pinFails.set(ip, f); if (pinFails.size > 5000) pinFails.delete(pinFails.keys().next().value);
+  pinFails.set(key, f); if (pinFails.size > 5000) pinFails.delete(pinFails.keys().next().value);
   return 'wrong';
 }
 
@@ -221,8 +221,8 @@ app.post('/api/approvals/:id/:action(approve|reject)', async (req, res, next) =>
     const ap = s.approvals.find((a) => a.id === req.params.id);
     if (!ap) return res.status(404).json({ error: 'Approval not found in this session.' });
     if (ap.status !== 'pending') return res.status(409).json({ error: `Already ${ap.status}.` });
-    const pin = pinCheck(req.ip, req.body?.pin);
-    if (pin !== 'ok') return res.status(pin === 'locked' ? 429 : 403).json({ error: pin === 'locked' ? 'Too many wrong PINs from this address. Try again in 10 minutes.' : 'Only the owner can countersign: wrong owner PIN.' });
+    const pin = pinCheck(s.id, req.body?.pin); // per session: one judge's typos never lock out another
+    if (pin !== 'ok') return res.status(pin === 'locked' ? 429 : 403).json({ error: pin === 'locked' ? 'Too many wrong PINs in this session. Try again in 10 minutes.' : 'Only the owner can countersign: wrong owner PIN.' });
     if (req.params.action === 'reject') {
       ap.status = 'rejected'; ap.decided = Date.now();
       audit.append({ run: ap.runId, event: 'owner-rejected', tool: ap.tool, approval: ap.id });
@@ -240,6 +240,17 @@ app.post('/api/approvals/:id/:action(approve|reject)', async (req, res, next) =>
       recordResult(ap.tool, now, s.state, result);
       ap.status = 'approved'; ap.decided = Date.now(); ap.result = result;
       audit.append({ run: ap.runId, event: 'owner-countersigned', tool: ap.tool, approval: ap.id, result: { id: result.refund_id || result.payout_batch_id || result.invoice_id, via: result.via } });
+      // The owner approved the invoice, so send the approved draft through the same checks.
+      if (ap.tool === 'create_invoice' && result.invoice_id) {
+        const send = evaluate('send_invoice', { invoice_id: result.invoice_id }, { state: s.state, email: ap.email, scan: scanEmail(ap.email) });
+        if (send.verdict === 'ALLOW') {
+          const undoSend = reserve('send_invoice', send, s.state, { auto: false });
+          try {
+            ap.sent = await execute('send_invoice', send, s.state, paypal, mockPayPal, { runId: ap.runId, approvalId: ap.id });
+            audit.append({ run: ap.runId, event: 'owner-countersigned-send', tool: 'send_invoice', approval: ap.id, result: { id: ap.sent.invoice_id, via: ap.sent.via } });
+          } catch (e) { undoSend(); ap.send_error = String(e.message).slice(0, 200); }
+        } else ap.send_error = send.rules.filter((r) => !r.ok).map((r) => r.msg).join(' ');
+      }
     } catch (e) {
       const unknown = /timed out/i.test(e.message);
       if (!unknown) { undo(); ap.status = 'pending'; } else ap.status = 'unknown';
