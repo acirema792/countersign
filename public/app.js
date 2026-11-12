@@ -195,6 +195,8 @@ async function loadSession() {
   const pct = Math.min(100, (s.auto_outflow_today / s.policy.daily_auto_outflow_budget) * 100);
   $('#budgetBar').style.width = pct + '%';
   $('#budgetTxt').textContent = `${money(s.auto_outflow_today)} of ${money(s.policy.daily_auto_outflow_budget)} auto budget`;
+  const caps = $('#capsTxt');
+  if (caps) caps.textContent = s.account_cap ? `Real PayPal outflows today: you ${money(s.visitor_outflow_today)} of ${money(s.visitor_cap)} · whole demo account ${money(s.account_outflow_today)} of ${money(s.account_cap)} (the last ${money(s.countersign_headroom)} is kept for automatic payments)` : '';
 }
 
 async function decide(id, act, btn) {

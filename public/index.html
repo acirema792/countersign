@@ -68,6 +68,7 @@
         <div class="card">
           <h3>Books <span class="muted small" id="paypalMode"></span></h3>
           <div class="budget"><div class="bar"><i id="budgetBar"></i></div><span class="small" id="budgetTxt"></span></div>
+          <div class="small muted" id="capsTxt"></div>
           <table class="books"><thead><tr><th>Order</th><th>Customer</th><th class="r">Paid</th><th class="r">Refunded</th></tr></thead><tbody id="orders"></tbody></table>
           <table class="books"><thead><tr><th>Bill</th><th>Vendor</th><th class="r">Amount</th><th>Status</th></tr></thead><tbody id="bills"></tbody></table>
           <button class="ghost sm" id="resetBtn">Reset my demo books</button>
@@ -131,7 +132,7 @@
   <section id="tab-audit" class="panel">
     <div class="card">
       <div class="colhead"><h3>Hash-chained receipts</h3><span id="auditVerify" class="small"></span></div>
-      <p class="muted small">Every decision and every execution is appended to a SHA-256 chain. The head is signed with Ed25519 (public key at <code>/api/audit/pubkey</code>; full export at <code>/api/audit/export</code>). Re-verify any time at <code>/api/audit/verify</code>. The log lives in memory and starts again when the free server restarts.</p><div class="small" id="auditHead"></div>
+      <p class="muted small">Every decision and every execution is appended to a SHA-256 chain. The head is signed with Ed25519 (public key at <code>/api/audit/pubkey</code>; full export at <code>/api/audit/export</code>). Re-verify any time at <code>/api/audit/verify</code>. The log lives in memory and starts again when the free server restarts. It is <b>shared by every visitor</b> of this demo; payees from "Write your own" emails are not recorded in it.</p><div class="small" id="auditHead"></div>
       <div class="scroll"><table class="audit"><thead><tr><th>#</th><th>Time</th><th>Run</th><th>Event</th><th>Verdict</th><th>Hash</th></tr></thead><tbody id="auditRows"></tbody></table></div>
     </div>
   </section>

@@ -101,7 +101,12 @@ async function getSession(req) {
     const seeded = await freshCaptures();
     s = { id, state: createState(world, seeded.captures, newLedger()), approvals: [], runs: [], scratch: new Map(), seedErrors: seeded.errors, created: Date.now() };
     sessions.set(id, s);
-    if (sessions.size > 300) sessions.delete(sessions.keys().next().value);
+    // Over 300 sessions, drop the least-recently-used one only if it has been idle for 30 minutes,
+    // so a burst of new sessions can't push out a judge mid-review (hard ceiling: 2,000).
+    if (sessions.size > 300) {
+      const [oldId, old] = sessions.entries().next().value;
+      if (Date.now() - (old.touched || old.created) > Number(process.env.SESSION_IDLE_MS ?? 30 * 60_000) || sessions.size > 2000) sessions.delete(oldId);
+    }
   }
   else { sessions.delete(id); sessions.set(id, s); } // keep the map in least-recently-used order
   s.touched = Date.now();
@@ -154,6 +159,10 @@ function sessionView(s) {
     invoices: st.invoices,
     auto_outflow_today: st.ledger.autoOutflow,
     account_outflow_today: st.account ? st.account.ledger.autoOutflow : 0, // real outflows from the shared PayPal account today
+    account_cap: st.account ? st.account.cap : null,
+    visitor_outflow_today: st.account?.visitor ? st.account.visitor.outflow : 0,
+    visitor_cap: st.account ? st.account.visitorCap : null,
+    countersign_headroom: Number(process.env.COUNTERSIGN_HEADROOM || 1000),
     approvals: s.approvals.slice().reverse(),
     runs: s.runs.slice(-30).reverse().map((id) => { const r = runs.get(id); return r && { id, label: r.label, title: r.title, status: r.status, guard: r.guard, source: r.source }; }).filter(Boolean),
     seed_errors: s.seedErrors
@@ -231,7 +240,7 @@ app.post('/api/run', async (req, res, next) => {
       approvals = { push: (ap) => s.approvals.push(Object.assign(ap, { simulated: true })) };
       runLLM = scriptedLLM(gullibleScript(case_id, capOf(runState)));
       Object.assign(run, { source: 'gullible', note: 'Scripted gullible agent: it does whatever the email asks. Simulated PayPal, on a fresh copy of the demo books (your own books are untouched).' });
-    } else if (process.env.SCRIPTED_LLM === '1' && case_id) { // local UI development only; never set in production
+    } else if (process.env.SCRIPTED_LLM === '1' && (case_id || process.env.SCRIPTED_STEPS)) { // local development and tests only; never set in production
       // Tests may supply their own steps, and make the model fail after them.
       const steps = process.env.SCRIPTED_STEPS ? JSON.parse(process.env.SCRIPTED_STEPS) : gullibleScript(case_id, capOf(s.state));
       runLLM = scriptedLLM(steps, { failAfter: process.env.SCRIPTED_FAIL_AFTER === '1' });
@@ -251,7 +260,9 @@ app.post('/api/run', async (req, res, next) => {
 
     res.json({ run_id: id });
     // Replay entries are marked in the shared receipt log so nobody mistakes them for sandbox activity.
-    const runAudit = runPayPal === paypal ? audit : { append: (e) => audit.append({ ...e, simulated: 'gullible-agent replay' }) };
+    // The receipt log is shared by every visitor: a payee typed into "Write your own" is kept out of it.
+    const hide = (m) => (m && label === 'custom' ? { ...m, ...(m.payee ? { payee: '(custom email)' } : {}), ...(m.recipient ? { recipient: '(custom email)' } : {}) } : m);
+    const runAudit = { append: (e) => audit.append({ ...e, ...(e.money ? { money: hide(e.money) } : {}), ...(runPayPal === paypal ? {} : { simulated: 'gullible-agent replay' }) }) };
     runAgent({ state: runState, email, llm: runLLM, paypal: runPayPal, mockPayPal: runPayPal === paypal ? mockPayPal : runPayPal, guard: g, audit: runAudit, approvals, runId: id, label, onEvent: (ev) => run.events.push(ev) })
       .then((r) => Object.assign(run, { status: 'done', final: r.final, models: r.models, tokens: r.tokens, ms: Date.now() - run.started }))
       .catch((e) => {
