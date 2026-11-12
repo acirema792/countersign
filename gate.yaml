@@ -1,0 +1,16 @@
+# Twin of loop-constraints.md "Protected paths". Checked by: node loop/gate.js [base-ref]
+version: 1
+maxFiles: 10
+denylist:
+  - "**/.env"
+  - "**/.env.*"
+  - "render.yaml"
+  - "data/cases.json"
+  - "data/world.json"
+  - "data/recorded/**"
+  - "eval_results/**"
+  - "eval/**"
+  - "src/eval.js"
+  - "BENCHMARK-RESULTS.md"
+tripwire:
+  - "src/policy.js"
