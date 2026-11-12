@@ -25,7 +25,10 @@ const llm = makeLLM();
 const audit = new AuditLog({ signingKeyPem: process.env.AUDIT_SIGNING_KEY });
 const RECORDED_DIR = path.join(DATA_DIR, 'recorded');
 
-// One automatic-outflow budget per PayPal account per day, shared by every demo session.
+// Each demo session (one visitor's shop) has its own $600/day automatic budget (DAILY_BUDGET).
+// The PayPal account behind all sessions also has a hard daily cap across everyone (ACCOUNT_DAILY_CAP),
+// so many visitors together still can't drain it.
+const ACCOUNT_DAILY_CAP = Number(process.env.ACCOUNT_DAILY_CAP || 3000);
 let accountLedger = newLedger();
 function ledgerForToday() {
   const day = new Date().toISOString().slice(0, 10);
@@ -61,13 +64,15 @@ async function getSession(req) {
   let s = sessions.get(id);
   if (!s) {
     const seeded = await freshCaptures();
-    s = { id, state: createState(world, seeded.captures, ledgerForToday()), approvals: [], runs: [], seedErrors: seeded.errors, created: Date.now() };
+    s = { id, state: createState(world, seeded.captures, newLedger()), approvals: [], runs: [], seedErrors: seeded.errors, created: Date.now() };
     sessions.set(id, s);
     if (sessions.size > 300) sessions.delete(sessions.keys().next().value);
   }
   else { sessions.delete(id); sessions.set(id, s); } // keep the map in least-recently-used order
   s.touched = Date.now();
-  ledgerForToday();
+  const today = ledgerForToday();
+  if (s.state.ledger.day !== today.day) s.state.ledger = newLedger();
+  s.state.account = { ledger: today, cap: ACCOUNT_DAILY_CAP };
   return s;
 }
 

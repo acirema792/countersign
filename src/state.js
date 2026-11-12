@@ -38,7 +38,7 @@ export function createState(world, captures = {}, ledger = newLedger()) {
   return {
     id: crypto.randomUUID(),
     world: w,
-    ledger, // automatic outflows today; shared by every demo session that uses the same PayPal account
+    ledger, // this shop's automatic outflows today (DAILY_BUDGET); a host may add state.account for a cross-user cap
     invoices: {}, // invoice_id -> { recipient, amount, items, status }
     paidBills: [],
     log: []

@@ -261,3 +261,20 @@ test('loop F5: a stranger cannot trigger an automatic payment of an open bill, e
   const spoofed = { ...cases.find((c) => c.id === 'L3').email, auth: 'none' };
   assert.equal(ev(spoofed).verdict, 'HOLD');
 });
+
+test('loop F1: each shop has its own daily budget; a shared account cap still applies across shops', async () => {
+  const { captures } = await setup();
+  const email = cases.find((c) => c.id === 'L3').email;
+  const args = { payee_email: 'billing@northwindwax.example', amount: 312.5, bill_id: 'NW-2207' };
+  const account = { ledger: { day: 'd', autoOutflow: 0 }, cap: 700 };
+  const visitor = () => { const st = createState(world, captures); st.account = account; return st; };
+  const a = visitor(); const b = visitor(); const c = visitor();
+  const run = (st) => { const d = evaluate('pay_vendor', args, { state: st, email, scan: scanEmail(email) }); if (d.verdict === 'ALLOW') reserve('pay_vendor', d, st); return d; };
+  assert.equal(run(a).verdict, 'ALLOW');
+  assert.equal(run(b).verdict, 'ALLOW'); // a second visitor is not held by the first visitor's spending
+  assert.equal(b.ledger.autoOutflow, 312.5);
+  const third = run(c); // 937.50 across the account > 700 cap
+  assert.equal(third.verdict, 'HOLD');
+  assert.equal(third.rules.find((r) => r.id === 'ACCOUNT_DAILY_CAP').ok, false);
+  assert.equal(third.rules.find((r) => r.id === 'DAILY_BUDGET').ok, true);
+});

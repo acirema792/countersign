@@ -73,6 +73,13 @@ function budgetRule(state, amount) {
     `Automatic outflows today would be $${after.toFixed(2)} of a $${p.daily_auto_outflow_budget} budget.`);
 }
 
+// Only when the host shares one PayPal account across many books (the demo server does).
+function accountCapRules(state, amount) {
+  if (!state.account) return [];
+  const after = round2(state.account.ledger.autoOutflow + amount);
+  return [rule('ACCOUNT_DAILY_CAP', 'HOLD', after <= state.account.cap, `Automatic outflows from this PayPal account today, across all users, would be $${after.toFixed(2)} of a $${state.account.cap} cap.`)];
+}
+
 function injectionRule(scan) {
   return rule('UNTRUSTED_INSTRUCTIONS', 'HOLD', !scan.suspicious,
     scan.suspicious
@@ -138,7 +145,7 @@ function evalRefund(args, ctx) {
 
   const lim = state.world.policy.auto_refund_limit;
   rules.push(rule('AUTO_REFUND_LIMIT', 'HOLD', amount <= lim, `Refund $${amount.toFixed(2)} vs automatic limit $${lim}.`));
-  rules.push(budgetRule(state, amount));
+  rules.push(budgetRule(state, amount), ...accountCapRules(state, amount));
   rules.push(injectionRule(scan));
   const exec = { capture_id: order.paypal.capture_id, amount: { currency_code: 'USD', value: amount.toFixed(2) }, note_to_payer: clip(args.note_to_payer || `Refund for order #${order.order_number}`, 200) };
   return { rules, prov, money: { direction: 'out', amount, ...ctxInfo }, exec };
@@ -208,7 +215,7 @@ function evalPayVendor(args, ctx) {
 
   const lim = state.world.policy.auto_vendor_payment_limit;
   rules.push(rule('AUTO_PAYMENT_LIMIT', 'HOLD', amount <= lim, `Payment $${amount.toFixed(2)} vs automatic limit $${lim}.`));
-  rules.push(budgetRule(state, amount));
+  rules.push(budgetRule(state, amount), ...accountCapRules(state, amount));
   rules.push(injectionRule(scan));
   const bill_id = bill ? bill.bill_id : null;
   // Pay the address on file (never the model's spelling of it); the bill reference comes from the books.
@@ -327,6 +334,8 @@ export function reserve(tool, decision, state, { auto = true } = {}) {
     const amt = m.amount || 0;
     state.ledger.autoOutflow = round2(state.ledger.autoOutflow + amt);
     undo.push(() => { state.ledger.autoOutflow = round2(state.ledger.autoOutflow - amt); });
+    const acct = state.account?.ledger;
+    if (acct) { acct.autoOutflow = round2(acct.autoOutflow + amt); undo.push(() => { acct.autoOutflow = round2(acct.autoOutflow - amt); }); }
   }
   return () => undo.reverse().forEach((f) => f());
 }
