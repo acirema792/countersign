@@ -300,13 +300,18 @@ export function evaluate(tool, args, ctx) {
     return { verdict: 'BLOCK', rules: [rule('TOOL_ALLOWED', 'BLOCK', false, `Tool ${tool} is not on the owner's allowlist.`)], provenance: [], money: null };
   }
   let r;
-  switch (tool) {
-    case 'create_refund': r = evalRefund(args || {}, ctx); break;
-    case 'pay_vendor': r = evalPayVendor(args || {}, ctx); break;
-    case 'create_invoice': r = evalCreateInvoice(args || {}, ctx); break;
-    case 'send_invoice': r = evalSendInvoice(args || {}, ctx); break;
-    default:
-      return { verdict: 'ALLOW', rules: [rule('READ_ONLY', 'ALLOW', true, 'Read-only or communication tool.')], provenance: [], money: null };
+  try {
+    switch (tool) {
+      case 'create_refund': r = evalRefund(args || {}, ctx); break;
+      case 'pay_vendor': r = evalPayVendor(args || {}, ctx); break;
+      case 'create_invoice': r = evalCreateInvoice(args || {}, ctx); break;
+      case 'send_invoice': r = evalSendInvoice(args || {}, ctx); break;
+      default:
+        return { verdict: 'ALLOW', rules: [rule('READ_ONLY', 'ALLOW', true, 'Read-only or communication tool.')], provenance: [], money: null };
+    }
+  } catch {
+    // Arguments the checks can't even read (e.g. objects posing as strings) never move money.
+    return { verdict: 'BLOCK', rules: [rule('ARGS_WELL_FORMED', 'BLOCK', false, `The ${tool} arguments are malformed, so nothing was sent.`)], provenance: [], money: null };
   }
   const verdict = r.rules.reduce((acc, x) => worst(acc, x.verdict), 'ALLOW');
   return { verdict, rules: r.rules, provenance: r.prov, money: r.money, exec: r.exec };

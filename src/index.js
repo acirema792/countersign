@@ -29,6 +29,7 @@ export function guardToolkit(toolkit, { state, onHold = () => {}, audit = null }
       const name = toolCall.function.name;
       let args = {};
       try { args = JSON.parse(toolCall.function.arguments || '{}'); } catch { args = {}; }
+      if (!args || typeof args !== 'object' || Array.isArray(args)) args = {};
       if (!MONEY_TOOLS.has(name)) {
         // Fail closed: only read-only toolkit tools pass through. Anything else that can move money
         // or change state (accept_dispute_claim, pay_order, cancel_subscription...) is not guarded here.

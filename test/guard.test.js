@@ -298,3 +298,19 @@ test('loop G1: the library wrapper fails closed for toolkit tools it does not gu
   await g.handleToolCall({ id: 'c', type: 'function', function: { name: 'get_order', arguments: '{"id":"X"}' } }, { email });
   assert.deepEqual(reached, ['get_order']);
 });
+
+test('loop G6: arguments the checks cannot read are blocked, not crashes', async () => {
+  const { captures } = await setup();
+  const state = createState(world, captures);
+  const email = cases.find((c) => c.id === 'L1').email;
+  const ctx = { state, email, scan: scanEmail(email) };
+  const odd = { toString: 1 };
+  for (const [tool, args] of [['create_refund', { capture_id: odd }], ['pay_vendor', { payee_email: odd, amount: 5 }], ['create_invoice', { items: [{ name: odd }] }], ['create_refund', null]]) {
+    const d = evaluate(tool, args, ctx);
+    assert.notEqual(d.verdict, 'ALLOW');
+  }
+  const { runAgent } = await import('../src/agent.js');
+  const llm = { provider: 'x', models: ['x'], async chat() { this.n = (this.n || 0) + 1; return this.n === 1 ? { message: { role: 'assistant', content: null, tool_calls: [{ id: 'c1', type: 'function', function: { name: 'lookup_shop_order', arguments: 'null' } }] }, model: 'x', usage: { total_tokens: 0 }, ms: 0 } : { message: { role: 'assistant', content: 'Done.' }, model: 'x', usage: { total_tokens: 0 }, ms: 0 }; } };
+  const r = await runAgent({ state, email, llm, paypal: mock, mockPayPal: mock, guard: 'enforce', approvals: [], runId: 't', onEvent: () => {} });
+  assert.ok(r);
+});

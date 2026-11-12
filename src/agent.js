@@ -100,6 +100,7 @@ export async function runAgent(opts) {
       const name = call.function.name;
       let args = {};
       try { args = JSON.parse(call.function.arguments || '{}'); } catch { args = {}; }
+      if (!args || typeof args !== 'object' || Array.isArray(args)) args = {}; // "null", numbers, arrays
       const content = await handleCall(name, args, call.id);
       messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify(content) });
     }
