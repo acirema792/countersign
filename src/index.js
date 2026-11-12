@@ -8,7 +8,8 @@
 //   const msg = await guarded.handleToolCall(toolCall, { email });   // same shape as the toolkit's
 //
 // ALLOW executes the policy-built payload through the toolkit; HOLD and BLOCK return a tool
-// message explaining why, and nothing reaches PayPal.
+// message explaining why, and nothing reaches PayPal. Read-only tools (get_/list_/show_) pass
+// through; every other toolkit tool is blocked (fail closed).
 import crypto from 'node:crypto';
 import { evaluate, reserve, recordResult, scanEmail, MONEY_TOOLS } from './policy.js';
 import { parseToolkitContent, isToolkitError, invoiceIdOf } from './paypal.js';
@@ -17,14 +18,24 @@ export { evaluate, reserve, recordResult, scanEmail } from './policy.js';
 export { createState, loadWorld, loadCases, newLedger } from './state.js';
 export { AuditLog, verifyChain } from './audit.js';
 
+const READ_ONLY = /^(get|list|show)_/;
+const toolName = (t) => t?.function?.name || t?.name || '';
+
 export function guardToolkit(toolkit, { state, onHold = () => {}, audit = null } = {}) {
   return {
-    getTools: () => toolkit.getTools(),
+    // Offer the model only tools Countersign guards or that are read-only.
+    getTools: () => toolkit.getTools().filter((t) => MONEY_TOOLS.has(toolName(t)) || READ_ONLY.test(toolName(t))),
     async handleToolCall(toolCall, { email = { from: '', subject: '', body: '' } } = {}) {
       const name = toolCall.function.name;
       let args = {};
       try { args = JSON.parse(toolCall.function.arguments || '{}'); } catch { args = {}; }
-      if (!MONEY_TOOLS.has(name)) return toolkit.handleToolCall(toolCall); // read-only toolkit calls pass through
+      if (!MONEY_TOOLS.has(name)) {
+        // Fail closed: only read-only toolkit tools pass through. Anything else that can move money
+        // or change state (accept_dispute_claim, pay_order, cancel_subscription...) is not guarded here.
+        if (READ_ONLY.test(name)) return toolkit.handleToolCall(toolCall);
+        audit?.append({ tool: name, verdict: 'BLOCK', reason: 'not guarded' });
+        return { role: 'tool', tool_call_id: toolCall.id, content: JSON.stringify({ status: 'BLOCKED', reasons: [`Tool ${name} is not guarded by Countersign, so it is not allowed.`] }) };
+      }
       const decision = evaluate(name, args, { state, email, scan: scanEmail(email) });
       audit?.append({ tool: name, verdict: decision.verdict, money: decision.money });
       const reply = (content) => ({ role: 'tool', tool_call_id: toolCall.id, content: JSON.stringify(content) });
