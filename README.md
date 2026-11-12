@@ -126,7 +126,7 @@ Pass the email with `auth: 'pass'` only when your mail system verified the sende
 
 ## Deploying behind a proxy
 
-Rate limits and the per-visitor cap key on the client address, which Express reads from `X-Forwarded-For` after trusting `TRUST_PROXY_HOPS` proxies (default 1, Render's single hop). To check a deployment, call `GET /api/health?ip=<your public IP>` (optionally with a made-up `X-Forwarded-For` header): `client_ip_matches: true` means limits key on your real address. If it is false, raise `TRUST_PROXY_HOPS` one at a time until it is true, and never above the real number of hops (too many lets a client forge its address). `client_ip: "public"` alone only shows the address isn't an internal one.
+Rate limits and the per-visitor cap key on the client address, which Express reads from `X-Forwarded-For` after trusting `TRUST_PROXY_HOPS` proxies (default 1, Render's single hop). To check a deployment, call `GET /api/health?ip=<your public IP>` (optionally with a made-up `X-Forwarded-For` header): `client_ip_matches: true` means limits key on your real address. If it is false, raise `TRUST_PROXY_HOPS` one at a time until it is true, and never above the real number of hops (too many lets a client forge its address). `client_ip: "public"` alone only shows the address isn't an internal one. The live demo on Render runs with `TRUST_PROXY_HOPS=3`, confirmed with this check (real address matched; forged `X-Forwarded-For` values ignored).
 
 ## Changes since the published run
 
