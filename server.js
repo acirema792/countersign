@@ -180,7 +180,7 @@ app.post('/api/run', async (req, res, next) => {
 
     let runLLM = llm;
     let runState = s.state; let runPayPal = paypal; let approvals = s.approvals;
-    const { scriptedLLM, gullibleScript } = await import('./test/helpers.js');
+    const { scriptedLLM, gullibleScript } = await import('./src/scripted.js');
     const capOf = (st) => Object.fromEntries(st.world.orders.map((o) => [o.order_number, o.paypal.capture_id]));
     if (gullible === true && case_id && g === 'enforce' && gullibleScript(case_id, {})) {
       if (!allowReplay(req.ip)) {
