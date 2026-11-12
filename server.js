@@ -81,11 +81,23 @@ async function freshCaptures() {
   } else lastSeedFailure = null;
   return r;
 }
+// New demo sessions per visitor per hour: stops one client from flooding the session table and
+// pushing out (least-recently-used) the session a judge is using.
+const sessionHits = new Map(); // visitor key -> timestamps
+function allowNewSession(key) {
+  const now = Date.now();
+  const hits = (sessionHits.get(key) || []).filter((t) => now - t < 3600_000);
+  if (hits.length >= Number(process.env.SESSIONS_PER_VISITOR_HOUR || 60)) return false;
+  hits.push(now); sessionHits.set(key, hits); if (sessionHits.size > 5000) sessionHits.delete(sessionHits.keys().next().value);
+  return true;
+}
+
 async function getSession(req) {
   let id = String(req.get('x-session') || '').slice(0, 40);
   if (!/^[a-zA-Z0-9-]{8,40}$/.test(id)) id = crypto.randomUUID();
   let s = sessions.get(id);
   if (!s) {
+    if (!allowNewSession(visitorKey(req.ip))) { const e = new Error('Too many new demo sessions from this address in the last hour. Reuse your current tab.'); e.status = 429; throw e; }
     const seeded = await freshCaptures();
     s = { id, state: createState(world, seeded.captures, newLedger()), approvals: [], runs: [], scratch: new Map(), seedErrors: seeded.errors, created: Date.now() };
     sessions.set(id, s);
@@ -464,7 +476,7 @@ app.get('/api/results', (req, res) => {
   res.type('json').send(fs.readFileSync(f, 'utf8'));
 });
 
-app.use((err, req, res, _next) => { console.error(err); res.status(500).json({ error: String(err.message || err).slice(0, 300) }); });
+app.use((err, req, res, _next) => { if (!err.status) console.error(err); res.status(err.status || 500).json({ error: String(err.message || err).slice(0, 300) }); });
 
 export { app, visitorKey };
 // Listen only when run directly (node server.js); tests import the app and listen on a free port.

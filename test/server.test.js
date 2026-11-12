@@ -184,7 +184,7 @@ test('server: replay entries in the shared receipt log are marked simulated (H4)
 
 test('server: the per-visitor cap follows the client address across sessions; other visitors are unaffected (H1)', async () => {
   await withEnv({ SCRIPTED_LLM: '1', ACCOUNT_DAILY_CAP: 1e9, COUNTERSIGN_HEADROOM: 0, VISITOR_DAILY_CAP: 1500 }, async () => {
-    const A = freshIp(); n++; const B = freshIp(); n++;
+    const A = (n++, freshIp()); const B = (n++, freshIp()); // addresses no other visitor uses
     assert.equal((await countersignPayout(visitor(A), 1400)).status, 200); // $1,400 countersigned for visitor A
     const again = await countersignPayout(visitor(A), 1400); // a NEW session from the same address
     assert.equal(again.status, 409);
@@ -238,4 +238,14 @@ test('server: a run is readable only by the session that started it (J1)', async
   const peek = await other.call(`/api/runs/${run_id}`);
   assert.equal(peek.status, 404);
   assert.ok(!JSON.stringify(peek.body).includes('my private note'));
+});
+
+test('server: one address cannot flood the session table and push out a judge (new-session limit)', async () => {
+  await withEnv({ SESSIONS_PER_VISITOR_HOUR: 5 }, async () => {
+    const ip = (n++, freshIp());
+    const codes = [];
+    for (let i = 0; i < 7; i++) codes.push((await visitor(ip).call('/api/session')).status);
+    assert.deepEqual(codes, [200, 200, 200, 200, 200, 429, 429]);
+    assert.equal((await visitor().call('/api/session')).status, 200); // other visitors are unaffected
+  });
 });

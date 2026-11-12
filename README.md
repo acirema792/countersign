@@ -141,7 +141,7 @@ An audit loop (fresh auditor → one minimal fix each → separate verifier that
 - the account cap also binds countersigned payments, the library wrapper blocks toolkit tools it doesn't guard, malformed tool arguments are blocked instead of crashing a run, and an empty From line can't skip the vendor check;
 - a **Replay with a gullible agent** button, and HTTP tests for the server;
 - a per-visitor cap on real outflows (so one visitor with the public demo PIN can't use up the sandbox), simulated refunds no longer count toward caps, and replay or simulated entries are marked in the Audit tab;
-- each run is visible only to the browser session that started it, IPv6 visitors count per /64, and the last $1,000 of the account cap is kept for automatic payments.
+- each run is visible only to the browser session that started it, IPv6 visitors count per /64, the last $1,000 of the account cap is kept for automatic payments, and one address can open at most 60 new demo sessions an hour (so it cannot push a judge's session out).
 
 None of this changes the published results: `node loop/tripwire.js` replays every recorded guarded decision through the current rules and checks each verdict and failed rule is identical (12/12). The loop's constraints, gate and audit reports are in [`loop/`](loop/) and [`loop-constraints.md`](loop-constraints.md).
 
@@ -149,7 +149,7 @@ None of this changes the published results: `node loop/tripwire.js` replays ever
 
 ```bash
 npm install
-npm test                  # 37 tests, offline: the whole case library through a scripted, maximally gullible agent
+npm test                  # 38 tests, offline: the whole case library through a scripted, maximally gullible agent
 PAYPAL_CLIENT_ID=... PAYPAL_CLIENT_SECRET=... GEMINI_API_KEY=... npm start
 # open http://localhost:3000
 ```
