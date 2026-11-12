@@ -65,6 +65,7 @@ async function getSession(req) {
     sessions.set(id, s);
     if (sessions.size > 300) sessions.delete(sessions.keys().next().value);
   }
+  else { sessions.delete(id); sessions.set(id, s); } // keep the map in least-recently-used order
   s.touched = Date.now();
   ledgerForToday();
   return s;
@@ -195,6 +196,19 @@ app.get('/api/recorded/:caseId', (req, res) => {
   res.json(r);
 });
 
+// Owner PIN: constant-time compare, and 5 wrong tries per address lock it for 10 minutes.
+const pinFails = new Map(); // ip -> { n, until }
+function pinCheck(ip, given) {
+  const f = pinFails.get(ip) || { n: 0, until: 0 };
+  if (f.until > Date.now()) return 'locked';
+  const a = crypto.createHash('sha256').update(String(given ?? '')).digest();
+  const b = crypto.createHash('sha256').update(OWNER_PIN).digest();
+  if (crypto.timingSafeEqual(a, b)) { pinFails.delete(ip); return 'ok'; }
+  f.n += 1; if (f.n >= 5) { f.n = 0; f.until = Date.now() + 10 * 60_000; }
+  pinFails.set(ip, f); if (pinFails.size > 5000) pinFails.delete(pinFails.keys().next().value);
+  return 'wrong';
+}
+
 // Owner countersignature. The agent has no tool that reaches this endpoint; it needs the owner PIN.
 app.post('/api/approvals/:id/:action(approve|reject)', async (req, res, next) => {
   try {
@@ -202,7 +216,8 @@ app.post('/api/approvals/:id/:action(approve|reject)', async (req, res, next) =>
     const ap = s.approvals.find((a) => a.id === req.params.id);
     if (!ap) return res.status(404).json({ error: 'Approval not found in this session.' });
     if (ap.status !== 'pending') return res.status(409).json({ error: `Already ${ap.status}.` });
-    if (String(req.body?.pin || '') !== OWNER_PIN) return res.status(403).json({ error: 'Only the owner can countersign: wrong owner PIN.' });
+    const pin = pinCheck(req.ip, req.body?.pin);
+    if (pin !== 'ok') return res.status(pin === 'locked' ? 429 : 403).json({ error: pin === 'locked' ? 'Too many wrong PINs from this address. Try again in 10 minutes.' : 'Only the owner can countersign: wrong owner PIN.' });
     if (req.params.action === 'reject') {
       ap.status = 'rejected'; ap.decided = Date.now();
       audit.append({ run: ap.runId, event: 'owner-rejected', tool: ap.tool, approval: ap.id });

@@ -201,7 +201,7 @@ async function decide(id, act, btn) {
   $('#apMsg').className = 'apmsg'; $('#apMsg').textContent = '';
   try {
     const r = await api(`/api/approvals/${id}/${act}`, { method: 'POST', body: JSON.stringify({ pin: $('#pin').value }) });
-    showApMsg(act === 'approve' ? `Countersigned. ${r.result && r.result.via === 'sandbox' ? 'Sent to the PayPal sandbox' : 'Executed (simulated capture)'}: ${r.result ? (r.result.refund_id || r.result.payout_batch_id || r.result.invoice_id || '') : ''}` : 'Rejected. Nothing was sent to PayPal.', 'ok');
+    showApMsg(act === 'approve' ? `Countersigned. ${approvedText(r)}` : 'Rejected. Nothing was sent to PayPal.', 'ok');
   } catch (e) { showApMsg(e.message, 'no'); }
   await loadSession();
 }
@@ -266,3 +266,13 @@ document.querySelectorAll('[data-pick]').forEach((a) => a.addEventListener('clic
   if (location.hash.includes('results')) showTab('results');
   window.addEventListener('hashchange', () => { const h = location.hash.match(/case=([A-Z0-9]+)/); if (h && (!current || current.id !== h[1])) { showTab('demo'); pick(h[1]); } });
 })();
+
+// What actually happened after a countersignature, worded per tool.
+function approvedText(ap) {
+  const r = ap.result || {};
+  const live = r.via === 'sandbox';
+  if (ap.tool === 'pay_vendor') return `${live ? 'Paid through PayPal Payouts (sandbox)' : 'Payment simulated'}: ${r.payout_batch_id || ''}`;
+  if (ap.tool === 'create_invoice') return `${live ? 'Invoice draft created in the PayPal sandbox' : 'Invoice draft simulated'} (not sent yet): ${r.invoice_id || ''}`;
+  if (ap.tool === 'send_invoice') return `${live ? 'Invoice sent through the PayPal sandbox' : 'Invoice send simulated'}: ${r.invoice_id || ''}`;
+  return `${live ? 'Refund sent to the PayPal sandbox' : 'Refund executed against a simulated capture'}: ${r.refund_id || ''}`;
+}
