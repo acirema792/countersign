@@ -46,7 +46,7 @@ test('server: each visitor has its own budget; the account cap binds automatic a
   const ap = await c.pending();
   const res = await c.call(`/api/approvals/${ap.id}/approve`, { pin: '2468' });
   assert.equal(res.status, 409);
-  assert.match(res.body.error, /daily cap/);
+  assert.match(res.body.error, /\$700 cap/);
 });
 
 test('server: wrong PINs lock only that session', async () => {

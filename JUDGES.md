@@ -22,7 +22,7 @@ The model is not deterministic: a live run may differ from the recorded one. Eac
 
 5. Open **"Invoice NW-2207 - soy wax"** (a genuine supplier bill) and run it with Countersign. The $312.50 payment is
    **ALLOWED · EXECUTED** through **PayPal Payouts in the sandbox**: the card shows the real `payout_batch_id`.
-   Each visitor's shop has its own $600/day budget. If many visitors have already paid today, the account-wide `ACCOUNT_DAILY_CAP` ($10,000/day) can hold it instead: that is the cap doing its job.
+   Each visitor's shop has its own $600/day budget. `ACCOUNT_DAILY_CAP` also limits real outflows to $10,000/day for the account and $1,500/day per visitor (automatic and countersigned), so one visitor can't use up the sandbox for everyone. If you hit it, that is the cap doing its job.
 6. Open **"Restock - 12 Cedar & Smoke"**: an invoice is created and sent at the wholesale price ($216.00; the card shows the `INV2-…` id).
    *Honest note:* PayPal's Invoicing API answered `403` for this sandbox app during the published run, so the card may say "Simulated" with the reason. The call goes through the same toolkit code path and switches to live once PayPal accepts it.
 7. Open **"Order #1042 - one candle arrived cracked"**: the $24.00 refund is allowed because it equals the unit price on the order.

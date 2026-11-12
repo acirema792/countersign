@@ -88,7 +88,7 @@ Also used: **Google Gemini 3.5 Flash-Lite** (falls back to 3.1 Flash-Lite) throu
 | `NOT_ALREADY_SENT`, `NO_EXTRA_RECIPIENTS` | An invoice is sent once, only to its draft recipient | BLOCK / HOLD |
 | `RECIPIENT_IS_CUSTOMER`, `PRICES_FROM_CATALOG` | Invoices only to customers, at list prices | HOLD |
 | `AUTO_REFUND_LIMIT`, `AUTO_PAYMENT_LIMIT`, `DAILY_BUDGET` | $150 / $400 per action, $600 per day automatic | HOLD |
-| `ACCOUNT_DAILY_CAP` | On the shared demo server: each visitor's shop has its own $600 budget, and the one PayPal account behind them has a $10,000/day cap across everyone, counting automatic and countersigned payments (the owner cannot countersign past it) | HOLD / refused |
+| `ACCOUNT_DAILY_CAP` | On the shared demo server: each visitor's shop has its own $600 budget, and the one PayPal account behind them has a $10,000/day cap across everyone; each visitor address also has a $1,500/day cap. Both count real automatic and countersigned payments (simulated refunds don't), and the owner cannot countersign past them | HOLD / refused |
 | `UNTRUSTED_INSTRUCTIONS` | Hidden HTML text or instructions addressed to the AI | HOLD |
 | `TOOL_ALLOWED` | Only the owner's allowlisted tools | BLOCK |
 | `ARGS_WELL_FORMED` | Tool arguments the checks can't read are refused, not executed | BLOCK |

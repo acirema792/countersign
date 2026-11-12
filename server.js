@@ -33,6 +33,16 @@ const RECORDED_DIR = path.join(DATA_DIR, 'recorded');
 // The PayPal account behind all sessions also has a hard daily cap across everyone (ACCOUNT_DAILY_CAP),
 // counting automatic and countersigned outflows, so many visitors together still can't drain it.
 const ACCOUNT_DAILY_CAP = Number(process.env.ACCOUNT_DAILY_CAP || 10000);
+// And each visitor (client address) has its own cap on REAL outflows, automatic and countersigned,
+// so one visitor with the public demo PIN can't use up the account for everyone else.
+const VISITOR_DAILY_CAP = Number(process.env.VISITOR_DAILY_CAP || 1500);
+const visitorLedgers = new Map(); // ip -> { day, outflow }
+function visitorLedger(ip) {
+  const day = new Date().toISOString().slice(0, 10);
+  let v = visitorLedgers.get(ip);
+  if (!v || v.day !== day) { v = { day, outflow: 0 }; visitorLedgers.set(ip, v); if (visitorLedgers.size > 5000) visitorLedgers.delete(visitorLedgers.keys().next().value); }
+  return v;
+}
 let accountLedger = newLedger();
 function ledgerForToday() {
   const day = new Date().toISOString().slice(0, 10);
@@ -76,7 +86,7 @@ async function getSession(req) {
   s.touched = Date.now();
   const today = ledgerForToday();
   if (s.state.ledger.day !== today.day) s.state.ledger = newLedger();
-  s.state.account = { ledger: today, cap: ACCOUNT_DAILY_CAP };
+  s.state.account = { ledger: today, cap: ACCOUNT_DAILY_CAP, visitor: visitorLedger(req.ip), visitorCap: VISITOR_DAILY_CAP };
   return s;
 }
 
@@ -272,10 +282,10 @@ app.post('/api/approvals/:id/:action(approve|reject)', async (req, res, next) =>
     const hard = now.rules.filter((r) => !r.ok && r.verdict === 'BLOCK');
     if (hard.length) return res.status(409).json({ error: `Cannot countersign: ${hard.map((r) => r.msg).join(' ')}` });
     // The shared PayPal account's daily cap binds the owner too (the demo PIN is public).
-    const acct = st.account; // scratch replay books have no account: simulated money
-    if (acct && ['create_refund', 'pay_vendor'].includes(ap.tool) && round2(acct.ledger.autoOutflow + (now.money?.amount || 0)) > acct.cap) {
-      return res.status(409).json({ error: `Cannot countersign: this PayPal account's $${acct.cap} daily cap (automatic and countersigned, across all users) would be exceeded.` });
-    }
+    // The account and per-visitor caps bind the owner too (the demo PIN is public). Scratch replay books have
+    // no account, and simulated refunds don't count, so the rule is simply absent for them.
+    const capRule = now.rules.find((r) => r.id === 'ACCOUNT_DAILY_CAP' && !r.ok);
+    if (capRule) return res.status(409).json({ error: `Cannot countersign: ${capRule.msg}` });
     // Claim the approval and reserve in the books in the same tick: a double click cannot pay twice.
     ap.status = 'executing';
     const undo = reserve(ap.tool, now, st, { auto: false });

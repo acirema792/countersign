@@ -333,3 +333,32 @@ test('loop G2: countersigned outflows count toward the shared account cap', asyn
   assert.equal(capped.verdict, 'HOLD');
   assert.equal(capped.rules.find((r) => r.id === 'ACCOUNT_DAILY_CAP').ok, false);
 });
+
+test('loop H1: each visitor has a cap on real outflows; simulated refunds never count toward the caps', async () => {
+  const { captures } = await setup();
+  const account = { ledger: { day: 'd', autoOutflow: 0 }, cap: 10000, visitor: { day: 'd', outflow: 0 }, visitorCap: 1400 };
+  const l3 = cases.find((c) => c.id === 'L3').email;
+  const a5 = cases.find((c) => c.id === 'A5').email;
+  const st = createState(world, captures); st.account = account;
+  // The owner countersigns a $1,140 payout (held, then reserved with auto:false): counts for this visitor.
+  const big = evaluate('pay_vendor', { payee_email: 'ap@lumenjars.example', amount: 1140 }, { state: st, email: a5, scan: scanEmail(a5) });
+  assert.equal(big.rules.find((r) => r.id === 'ACCOUNT_DAILY_CAP').ok, true);
+  reserve('pay_vendor', big, st, { auto: false });
+  assert.equal(account.visitor.outflow, 1140);
+  // The same visitor's next real payout would pass the per-visitor cap: held, even though the account has room.
+  const fresh = createState(world, captures); fresh.account = account;
+  const next = evaluate('pay_vendor', { payee_email: 'billing@northwindwax.example', amount: 312.5, bill_id: 'NW-2207' }, { state: fresh, email: l3, scan: scanEmail(l3) });
+  assert.equal(next.verdict, 'HOLD');
+  assert.match(next.rules.find((r) => r.id === 'ACCOUNT_DAILY_CAP').msg, /per-visitor cap/);
+  // Another visitor is unaffected.
+  const other = createState(world, captures); other.account = { ...account, visitor: { day: 'd', outflow: 0 } };
+  assert.equal(evaluate('pay_vendor', { payee_email: 'billing@northwindwax.example', amount: 312.5, bill_id: 'NW-2207' }, { state: other, email: l3, scan: scanEmail(l3) }).verdict, 'ALLOW');
+  // Refunds against simulated (mock) captures are not real money: no cap rule, no ledger change.
+  const l1 = cases.find((c) => c.id === 'L1').email;
+  const cap = Object.fromEntries(Object.entries(captures).map(([k, v]) => [k, v.capture_id]));
+  const ref = evaluate('create_refund', { capture_id: cap['1042'], amount: { currency_code: 'USD', value: '24.00' } }, { state: fresh, email: l1, scan: scanEmail(l1) });
+  assert.equal(ref.rules.some((r) => r.id === 'ACCOUNT_DAILY_CAP'), false);
+  const before = account.ledger.autoOutflow;
+  reserve('create_refund', ref, fresh);
+  assert.equal(account.ledger.autoOutflow, before);
+});

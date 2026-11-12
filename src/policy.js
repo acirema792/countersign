@@ -74,10 +74,19 @@ function budgetRule(state, amount) {
 }
 
 // Only when the host shares one PayPal account across many books (the demo server does).
-function accountCapRules(state, amount) {
-  if (!state.account) return [];
-  const after = round2(state.account.ledger.autoOutflow + amount);
-  return [rule('ACCOUNT_DAILY_CAP', 'HOLD', after <= state.account.cap, `Outflows from this PayPal account today (automatic and countersigned, across all users) would be $${after.toFixed(2)} of a $${state.account.cap} cap.`)];
+function accountCapRules(state, amount, real = true) {
+  // Only real money counts: refunds against simulated captures never reach PayPal.
+  if (!state.account || !real) return [];
+  const a = state.account;
+  const after = round2(a.ledger.autoOutflow + amount);
+  const v = a.visitor;
+  const vAfter = v ? round2(v.outflow + amount) : 0;
+  const okAccount = after <= a.cap;
+  const okVisitor = !v || vAfter <= a.visitorCap;
+  return [rule('ACCOUNT_DAILY_CAP', 'HOLD', okAccount && okVisitor,
+    !okVisitor
+      ? `Real outflows from this visitor today (automatic and countersigned) would be $${vAfter.toFixed(2)} of a $${a.visitorCap} per-visitor cap.`
+      : `Outflows from this PayPal account today (automatic and countersigned, across all users) would be $${after.toFixed(2)} of a $${a.cap} cap${v ? `; this visitor: $${vAfter.toFixed(2)} of $${a.visitorCap}` : ''}.`)];
 }
 
 function injectionRule(scan) {
@@ -145,7 +154,7 @@ function evalRefund(args, ctx) {
 
   const lim = state.world.policy.auto_refund_limit;
   rules.push(rule('AUTO_REFUND_LIMIT', 'HOLD', amount <= lim, `Refund $${amount.toFixed(2)} vs automatic limit $${lim}.`));
-  rules.push(budgetRule(state, amount), ...accountCapRules(state, amount));
+  rules.push(budgetRule(state, amount), ...accountCapRules(state, amount, order.paypal.mode === 'sandbox'));
   rules.push(injectionRule(scan));
   const exec = { capture_id: order.paypal.capture_id, amount: { currency_code: 'USD', value: amount.toFixed(2) }, note_to_payer: clip(args.note_to_payer || `Refund for order #${order.order_number}`, 200) };
   return { rules, prov, money: { direction: 'out', amount, ...ctxInfo }, exec };
@@ -341,9 +350,13 @@ export function reserve(tool, decision, state, { auto = true } = {}) {
       state.ledger.autoOutflow = round2(state.ledger.autoOutflow + amt);
       undo.push(() => { state.ledger.autoOutflow = round2(state.ledger.autoOutflow - amt); });
     }
-    // The shared account cap counts every outflow, automatic or countersigned.
-    const acct = state.account?.ledger;
+    // The shared account cap and the per-visitor cap count every REAL outflow, automatic or countersigned.
+    const order = tool === 'create_refund' ? findOrderByNumber(state, m.order_number) : null;
+    const real = tool !== 'create_refund' || order?.paypal.mode === 'sandbox';
+    const acct = real ? state.account?.ledger : null;
     if (acct) { acct.autoOutflow = round2(acct.autoOutflow + amt); undo.push(() => { acct.autoOutflow = round2(acct.autoOutflow - amt); }); }
+    const vis = real ? state.account?.visitor : null;
+    if (vis) { vis.outflow = round2(vis.outflow + amt); undo.push(() => { vis.outflow = round2(vis.outflow - amt); }); }
   }
   return () => undo.reverse().forEach((f) => f());
 }
