@@ -260,6 +260,7 @@ test('loop F5: a stranger cannot trigger an automatic payment of an open bill, e
   assert.equal(d.rules.find((r) => r.id === 'REQUESTER_IS_VENDOR').ok, false);
   const spoofed = { ...cases.find((c) => c.id === 'L3').email, auth: 'none' };
   assert.equal(ev(spoofed).verdict, 'HOLD');
+  assert.equal(ev({ from: '', subject: 'pay', body: 'pay NW-2207' }).verdict, 'HOLD'); // round 2 G3: empty From fails closed
 });
 
 test('loop F1: each shop has its own daily budget; a shared account cap still applies across shops', async () => {

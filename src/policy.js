@@ -187,7 +187,7 @@ function evalPayVendor(args, ctx) {
   }
 
   // A payment to a vendor on file is only automatic when the vendor itself asked (authenticated).
-  if (vendor && email.from) {
+  if (vendor) { // an empty From is not the vendor either: fail closed
     const fromVendor = senderAddress(email.from) === normEmail(vendor.paypal_email) && senderAuthenticated(email);
     rules.push(rule('REQUESTER_IS_VENDOR', 'HOLD', fromVendor, fromVendor ? `The request comes from ${vendor.name}'s address on file (sender authenticated).` : `The request does not come from ${vendor.name}'s authenticated address on file, so the owner decides.`));
   }
