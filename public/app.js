@@ -77,6 +77,7 @@ function renderEmail(email, c) {
 // ---------- runs ----------
 $('#runGuarded').onclick = () => startRun({ case_id: current.id, guard: 'enforce' });
 $('#runBaseline').onclick = () => startRun({ case_id: current.id, guard: 'off' });
+$('#runGullible').onclick = () => startRun({ case_id: current.id, guard: 'enforce', gullible: true });
 
 async function startRun(body) {
   setBusy(true);
@@ -87,7 +88,7 @@ async function startRun(body) {
   } catch (e) { $('#timeline').innerHTML = `<div class="ev">${esc(e.message)}</div>`; setBusy(false); }
 }
 
-function setBusy(b) { ['#runGuarded', '#runBaseline'].forEach((s) => { $(s).disabled = b; }); }
+function setBusy(b) { ['#runGuarded', '#runBaseline', '#runGullible'].forEach((s) => { $(s).disabled = b; }); }
 
 function pollRun(id) {
   clearInterval(polling);
@@ -106,7 +107,7 @@ function renderRun(r) {
   const off = r.guard === 'off';
   const head = `<div class="ev runhead ${off ? 'off' : ''}">
     <span><b>${off ? 'Baseline: Countersign OFF' : 'Countersign ON'}</b> · ${esc(r.title || '')}</span>
-    <span class="small muted">${r.source === 'recorded' ? `recorded run${r.recorded_at ? ' · ' + esc(r.recorded_at.slice(0, 16).replace('T', ' ')) + ' UTC' : ''}` : 'live'}${r.models ? ' · ' + esc(r.models.join(', ')) : ''}${r.status === 'running' ? ' · <span class="spin"></span>' : ''}</span>
+    <span class="small muted">${r.source === 'recorded' ? `recorded run${r.recorded_at ? ' · ' + esc(r.recorded_at.slice(0, 16).replace('T', ' ')) + ' UTC' : ''}` : r.source === 'gullible' ? 'gullible agent · simulated PayPal' : 'live'}${r.models ? ' · ' + esc(r.models.join(', ')) : ''}${r.status === 'running' ? ' · <span class="spin"></span>' : ''}</span>
   </div>${r.note ? `<div class="ev small">${esc(r.note)}</div>` : ''}${off ? `<div class="ev small muted">Same model, same prompt, same tools. Nothing below was sent to PayPal: the agent was told its actions succeeded, so you see what it <i>would</i> have done.</div>` : ''}`;
   const evs = r.events || [];
   const finalText = (evs.find((e) => e.type === 'end') || {}).final;
@@ -181,7 +182,7 @@ async function loadSession() {
   const doneA = s.approvals.filter((a) => a.status !== 'pending').slice(0, 5);
   $('#approvals').innerHTML = (pend.length || doneA.length) ? [...pend, ...doneA].map((a) => {
     const why = a.decision.rules.filter((r) => !r.ok).map((r) => esc(r.msg)).join(' ');
-    return `<li class="ap"><b>${describe(a.tool, a.args, a.decision.money)}</b><div class="small muted">from: ${esc(a.email.from)}</div><div class="why">${why}</div>
+    return `<li class="ap"><b>${describe(a.tool, a.args, a.decision.money)}</b>${a.simulated ? ' <span class="small muted">· gullible replay, simulated</span>' : ''}<div class="small muted">from: ${esc(a.email.from)}</div><div class="why">${why}</div>
       ${a.status === 'pending' ? `<div class="btns"><button class="primary sm" data-ap="${a.id}" data-act="approve">Countersign</button><button class="ghost sm" data-ap="${a.id}" data-act="reject">Reject</button></div>` : `<div class="done ${a.status === 'approved' ? 'ok' : 'no'}">${a.status}${a.result ? ` · ${esc(a.result.refund_id || a.result.payout_batch_id || a.result.invoice_id || '')}` : ''}</div>`}</li>`;
   }).join('') : '<li class="muted small">Nothing waiting.</li>';
   $('#approvals').querySelectorAll('[data-ap]').forEach((b) => b.addEventListener('click', () => decide(b.dataset.ap, b.dataset.act, b)));

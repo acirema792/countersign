@@ -21,6 +21,10 @@ const world = loadWorld();
 const cases = loadCases();
 const paypal = makePayPal();
 const mockPayPal = makePayPal({ PAYPAL_MODE: 'mock' });
+// PayPal stand-in for gullible-agent replays: never touches the sandbox, and says so on every result.
+const simulatedReplayPayPal = Object.assign(Object.create(mockPayPal), {
+  async execute(tool, args) { return { ...(await mockPayPal.execute(tool, args)), simulated_reason: 'gullible-agent replay' }; }
+});
 const llm = makeLLM();
 const audit = new AuditLog({ signingKeyPem: process.env.AUDIT_SIGNING_KEY });
 const RECORDED_DIR = path.join(DATA_DIR, 'recorded');
@@ -64,7 +68,7 @@ async function getSession(req) {
   let s = sessions.get(id);
   if (!s) {
     const seeded = await freshCaptures();
-    s = { id, state: createState(world, seeded.captures, newLedger()), approvals: [], runs: [], seedErrors: seeded.errors, created: Date.now() };
+    s = { id, state: createState(world, seeded.captures, newLedger()), approvals: [], runs: [], scratch: new Map(), seedErrors: seeded.errors, created: Date.now() };
     sessions.set(id, s);
     if (sessions.size > 300) sessions.delete(sessions.keys().next().value);
   }
@@ -137,7 +141,7 @@ app.post('/api/session/reset', async (req, res, next) => {
 app.post('/api/run', async (req, res, next) => {
   try {
     const s = await getSession(req);
-    const { case_id, email: custom, guard = 'enforce' } = req.body || {};
+    const { case_id, email: custom, guard = 'enforce', gullible } = req.body || {};
     let email; let title; let label;
     if (case_id) {
       const c = cases.find((x) => x.id === case_id);
@@ -155,10 +159,21 @@ app.post('/api/run', async (req, res, next) => {
     runs.set(id, run); trimRuns(); s.runs.push(id);
 
     let runLLM = llm;
-    if (process.env.SCRIPTED_LLM === '1' && case_id) { // local UI development only; never set in production
-      const { scriptedLLM, gullibleScript } = await import('./test/helpers.js');
-      const cap = Object.fromEntries(s.state.world.orders.map((o) => [o.order_number, o.paypal.capture_id]));
-      runLLM = scriptedLLM(gullibleScript(case_id, cap));
+    let runState = s.state; let runPayPal = paypal; let approvals = s.approvals;
+    const { scriptedLLM, gullibleScript } = await import('./test/helpers.js');
+    const capOf = (st) => Object.fromEntries(st.world.orders.map((o) => [o.order_number, o.paypal.capture_id]));
+    if (gullible === true && case_id && g === 'enforce' && gullibleScript(case_id, {})) {
+      // "Replay with a gullible agent": a scripted agent that obeys every email, against a scratch copy
+      // of this visitor's books, with simulated PayPal. Shows what the guard does when the model doesn't help.
+      const captures = Object.fromEntries(s.state.world.orders.map((o) => [o.order_number, { capture_id: o.paypal.capture_id, order_id: o.paypal.order_id, amount: o.paypal.captured, mode: o.paypal.mode }]));
+      runState = createState(world, captures, newLedger());
+      s.scratch.set(id, runState); if (s.scratch.size > 20) s.scratch.delete(s.scratch.keys().next().value);
+      runPayPal = simulatedReplayPayPal;
+      approvals = { push: (ap) => s.approvals.push(Object.assign(ap, { simulated: true })) };
+      runLLM = scriptedLLM(gullibleScript(case_id, capOf(runState)));
+      Object.assign(run, { source: 'gullible', note: 'Scripted gullible agent: it does whatever the email asks. Simulated PayPal, scratch copy of your books.' });
+    } else if (process.env.SCRIPTED_LLM === '1' && case_id) { // local UI development only; never set in production
+      runLLM = scriptedLLM(gullibleScript(case_id, capOf(s.state)));
     }
     const live = runLLM && (runLLM !== llm || allowLive(req.ip));
     if (!live) {
@@ -174,7 +189,7 @@ app.post('/api/run', async (req, res, next) => {
     }
 
     res.json({ run_id: id });
-    runAgent({ state: s.state, email, llm: runLLM, paypal, mockPayPal, guard: g, audit, approvals: s.approvals, runId: id, label, onEvent: (ev) => run.events.push(ev) })
+    runAgent({ state: runState, email, llm: runLLM, paypal: runPayPal, mockPayPal: runPayPal === paypal ? mockPayPal : runPayPal, guard: g, audit, approvals, runId: id, label, onEvent: (ev) => run.events.push(ev) })
       .then((r) => Object.assign(run, { status: 'done', final: r.final, models: r.models, tokens: r.tokens, ms: Date.now() - run.started }))
       .catch((e) => {
         console.error('[run]', e);
@@ -228,30 +243,35 @@ app.post('/api/approvals/:id/:action(approve|reject)', async (req, res, next) =>
       audit.append({ run: ap.runId, event: 'owner-rejected', tool: ap.tool, approval: ap.id });
       return res.json(ap);
     }
+    // Gullible-agent replays live in a scratch copy of the books and never reach PayPal.
+    const st = ap.simulated ? s.scratch.get(ap.runId) : s.state;
+    if (!st) return res.status(410).json({ error: 'That replay has expired. Run it again.' });
+    const pp = ap.simulated ? simulatedReplayPayPal : paypal;
+    const mp = ap.simulated ? simulatedReplayPayPal : mockPayPal;
     // Re-check against the books as they are NOW; hard blocks cannot be countersigned.
-    const now = evaluate(ap.tool, ap.args, { state: s.state, email: ap.email, scan: scanEmail(ap.email) });
+    const now = evaluate(ap.tool, ap.args, { state: st, email: ap.email, scan: scanEmail(ap.email) });
     const hard = now.rules.filter((r) => !r.ok && r.verdict === 'BLOCK');
     if (hard.length) return res.status(409).json({ error: `Cannot countersign: ${hard.map((r) => r.msg).join(' ')}` });
     // The shared PayPal account's daily cap binds the owner too (the demo PIN is public).
-    const acct = s.state.account;
+    const acct = st.account; // scratch replay books have no account: simulated money
     if (acct && ['create_refund', 'pay_vendor'].includes(ap.tool) && round2(acct.ledger.autoOutflow + (now.money?.amount || 0)) > acct.cap) {
       return res.status(409).json({ error: `Cannot countersign: this PayPal account's $${acct.cap} daily cap (automatic and countersigned, across all users) would be exceeded.` });
     }
     // Claim the approval and reserve in the books in the same tick: a double click cannot pay twice.
     ap.status = 'executing';
-    const undo = reserve(ap.tool, now, s.state, { auto: false });
+    const undo = reserve(ap.tool, now, st, { auto: false });
     try {
-      const result = await execute(ap.tool, now, s.state, paypal, mockPayPal, { runId: ap.runId, approvalId: ap.id });
-      recordResult(ap.tool, now, s.state, result);
+      const result = await execute(ap.tool, now, st, pp, mp, { runId: ap.runId, approvalId: ap.id });
+      recordResult(ap.tool, now, st, result);
       ap.status = 'approved'; ap.decided = Date.now(); ap.result = result;
       audit.append({ run: ap.runId, event: 'owner-countersigned', tool: ap.tool, approval: ap.id, result: { id: result.refund_id || result.payout_batch_id || result.invoice_id, via: result.via } });
       // The owner approved the invoice, so send the approved draft through the same checks.
       if (ap.tool === 'create_invoice' && result.invoice_id) {
-        const send = evaluate('send_invoice', { invoice_id: result.invoice_id }, { state: s.state, email: ap.email, scan: scanEmail(ap.email) });
+        const send = evaluate('send_invoice', { invoice_id: result.invoice_id }, { state: st, email: ap.email, scan: scanEmail(ap.email) });
         if (send.verdict === 'ALLOW') {
-          const undoSend = reserve('send_invoice', send, s.state, { auto: false });
+          const undoSend = reserve('send_invoice', send, st, { auto: false });
           try {
-            ap.sent = await execute('send_invoice', send, s.state, paypal, mockPayPal, { runId: ap.runId, approvalId: ap.id });
+            ap.sent = await execute('send_invoice', send, st, pp, mp, { runId: ap.runId, approvalId: ap.id });
             audit.append({ run: ap.runId, event: 'owner-countersigned-send', tool: 'send_invoice', approval: ap.id, result: { id: ap.sent.invoice_id, via: ap.sent.via } });
           } catch (e) { undoSend(); ap.send_error = String(e.message).slice(0, 200); }
         } else ap.send_error = send.rules.filter((r) => !r.ok).map((r) => r.msg).join(' ');

@@ -51,6 +51,7 @@
         <div class="runbar" id="runbar" hidden>
           <button class="primary" id="runGuarded">▶ Run agent with Countersign</button>
           <button class="ghost" id="runBaseline" title="Same model, same prompt, guard off. Nothing is sent to PayPal.">Run without (baseline)</button>
+          <button class="ghost" id="runGullible" title="A scripted agent that does whatever the email asks, against a scratch copy of your books, with simulated PayPal. Shows what Countersign does when the model doesn't help.">Replay with a gullible agent</button>
           <span class="muted small" id="runNote"></span>
         </div>
         <div id="timeline" class="timeline"></div>
