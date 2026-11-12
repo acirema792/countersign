@@ -148,8 +148,12 @@ app.use(express.json({ limit: '100kb' }));
 app.use(express.static(path.join(here, 'public'), { setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache') }));
 
 app.get('/api/health', (req, res) => {
-  // client_ip: 'public' means per-visitor limits see real visitors; 'private' means TRUST_PROXY_HOPS needs raising.
-  res.json({ ok: true, version: VERSION, paypal_mode: paypal.mode, llm: llm ? { provider: llm.provider, models: llm.models, status: llm.status() } : null, cases: cases.length, audit_entries: audit.entries.length, client_ip: isPrivateIp(req.ip) ? 'private' : 'public' });
+  // Deploy check: GET /api/health?ip=<your public IP> answers client_ip_matches: true only when the server keys
+  // limits on your real address (too few trusted hops: a proxy's address; too many: a header you could forge).
+  const asked = String(req.query.ip || '').slice(0, 64).replace(/^::ffff:/, '');
+  const seen = String(req.ip || '').replace(/^::ffff:/, '');
+  const match = asked ? { client_ip_matches: asked === seen } : {};
+  res.json({ ...match, ok: true, version: VERSION, paypal_mode: paypal.mode, llm: llm ? { provider: llm.provider, models: llm.models, status: llm.status() } : null, cases: cases.length, audit_entries: audit.entries.length, client_ip: isPrivateIp(req.ip) ? 'private' : 'public' });
 });
 
 app.get('/api/inbox', (req, res) => {

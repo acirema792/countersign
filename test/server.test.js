@@ -173,6 +173,10 @@ test('server: the per-visitor cap follows the client address across sessions; ot
     const again = await big(visitor(A)); // a NEW session from the same address
     assert.equal(again.status, 409);
     assert.match(again.body.error, /per-visitor cap/);
+    // A forged left-hand X-Forwarded-For entry (what a client can send through the proxy) doesn't make a new visitor.
+    const forged = await big(visitor(`6.6.6.6, ${A}`));
+    assert.equal(forged.status, 409);
+    assert.match(forged.body.error, /per-visitor cap/);
     const auto = proposals(await visitor(A).run({ case_id: 'L3' }))[0]; // the automatic path is capped too
     assert.equal(auto.status, 'held');
     assert.ok(auto.decision.rules.some((r) => r.id === 'ACCOUNT_DAILY_CAP' && !r.ok));
@@ -185,4 +189,7 @@ test('server: /api/health reports whether the client address looks public (proxy
   assert.equal(local.client_ip, 'private'); // a direct local connection
   const { body: viaProxy } = await visitor('203.0.113.7').call('/api/health');
   assert.equal(viaProxy.client_ip, 'public');
+  assert.equal((await visitor('203.0.113.7').call('/api/health?ip=203.0.113.7')).body.client_ip_matches, true);
+  assert.equal((await visitor('6.6.6.6, 203.0.113.7').call('/api/health?ip=203.0.113.7')).body.client_ip_matches, true); // forged entry ignored
+  assert.equal((await visitor('6.6.6.6, 203.0.113.7').call('/api/health?ip=6.6.6.6')).body.client_ip_matches, false);
 });
