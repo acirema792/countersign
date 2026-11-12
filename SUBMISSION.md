@@ -56,7 +56,7 @@ The unguarded agent refunded a stranger $420 for someone else's order, refunded 
 - **AI tools used:** Gemini at runtime. The project was designed, coded, tested, audited and documented with **Claude (Anthropic)** as an AI pair programmer.
 
 ## Challenges we ran into
-- **An independent audit pass** broke our first build. It found double payment under concurrent approvals, invoice terms (currency, discounts, negative quantities) that the guard checked but didn't enforce, and a spoofable From line. All of these are fixed and pinned by regression tests (34 offline tests).
+- **An independent audit pass** broke our first build. It found double payment under concurrent approvals, invoice terms (currency, discounts, negative quantities) that the guard checked but didn't enforce, and a spoofable From line. All of these are fixed and pinned by regression tests (37 offline tests).
 - **Free-tier model limits.** The full Flash models hit their daily cap mid-benchmark, so we rebuilt the client around Flash-Lite with pacing and fallbacks.
 - **Sandbox realities.** The new US sandbox account refuses card captures, and the Invoicing permission was still propagating, so refunds and invoices in the published run are **simulated and clearly labelled**. Payouts are real.
 

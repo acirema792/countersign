@@ -126,7 +126,7 @@ Pass the email with `auth: 'pass'` only when your mail system verified the sende
 
 ## Deploying behind a proxy
 
-Rate limits and the per-visitor cap key on the client address, which Express reads from `X-Forwarded-For` after trusting `TRUST_PROXY_HOPS` proxies (default 1, Render's single hop). To check a deployment, call `GET /api/health?ip=<your public IP>` (optionally with a made-up `X-Forwarded-For` header): `client_ip_matches: true` means limits key on your real address. If it is false, raise `TRUST_PROXY_HOPS` one at a time until it is true, and never above the real number of hops (too many lets a client forge its address). `client_ip: "public"` alone only shows the address isn't an internal one. The live demo on Render runs with `TRUST_PROXY_HOPS=3`, confirmed with this check (real address matched; forged `X-Forwarded-For` values ignored).
+Rate limits and the per-visitor cap key on the client address (an IPv4 address or an IPv6 /64), which Express reads from `X-Forwarded-For` after trusting `TRUST_PROXY_HOPS` proxies. The code default is 1; Render puts **3** proxies in front of the app, and `render.yaml` sets `TRUST_PROXY_HOPS=3`. To check any deployment, call `GET /api/health?ip=<your public IP>` (optionally with a made-up `X-Forwarded-For` header): `client_ip_matches: true` means limits key on your real address. If it is false, raise `TRUST_PROXY_HOPS` one at a time until it is true, and never above the real number of hops (too many lets a client forge its address). `client_ip: "public"` alone only shows the address isn't an internal one. The live demo was checked this way: real address matched, forged `X-Forwarded-For` values ignored.
 
 ## Changes since the published run
 
@@ -140,7 +140,8 @@ An audit loop (fresh auditor → one minimal fix each → separate verifier that
 - per-session PIN lockout with a constant-time compare;
 - the account cap also binds countersigned payments, the library wrapper blocks toolkit tools it doesn't guard, malformed tool arguments are blocked instead of crashing a run, and an empty From line can't skip the vendor check;
 - a **Replay with a gullible agent** button, and HTTP tests for the server;
-- a per-visitor cap on real outflows (so one visitor with the public demo PIN can't use up the sandbox), simulated refunds no longer count toward caps, and replay or simulated entries are marked in the Audit tab.
+- a per-visitor cap on real outflows (so one visitor with the public demo PIN can't use up the sandbox), simulated refunds no longer count toward caps, and replay or simulated entries are marked in the Audit tab;
+- each run is visible only to the browser session that started it, IPv6 visitors count per /64, and the last $1,000 of the account cap is kept for automatic payments.
 
 None of this changes the published results: `node loop/tripwire.js` replays every recorded guarded decision through the current rules and checks each verdict and failed rule is identical (12/12). The loop's constraints, gate and audit reports are in [`loop/`](loop/) and [`loop-constraints.md`](loop-constraints.md).
 
@@ -148,7 +149,7 @@ None of this changes the published results: `node loop/tripwire.js` replays ever
 
 ```bash
 npm install
-npm test                  # 34 tests, offline: the whole case library through a scripted, maximally gullible agent
+npm test                  # 37 tests, offline: the whole case library through a scripted, maximally gullible agent
 PAYPAL_CLIENT_ID=... PAYPAL_CLIENT_SECRET=... GEMINI_API_KEY=... npm start
 # open http://localhost:3000
 ```
