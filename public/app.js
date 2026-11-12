@@ -272,7 +272,10 @@ function approvedText(ap) {
   const r = ap.result || {};
   const live = r.via === 'sandbox';
   if (ap.tool === 'pay_vendor') return `${live ? 'Paid through PayPal Payouts (sandbox)' : 'Payment simulated'}: ${r.payout_batch_id || ''}`;
-  if (ap.tool === 'create_invoice') return `${live ? 'Invoice draft created in the PayPal sandbox' : 'Invoice draft simulated'} (not sent yet): ${r.invoice_id || ''}`;
+  if (ap.tool === 'create_invoice') {
+    const sent = ap.sent ? ` and ${ap.sent.via === 'sandbox' ? 'sent' : 'sent (simulated)'}` : ap.send_error ? `; not sent: ${ap.send_error}` : '';
+    return `${live ? 'Invoice created in the PayPal sandbox' : 'Invoice simulated'}${sent}: ${r.invoice_id || ''}`;
+  }
   if (ap.tool === 'send_invoice') return `${live ? 'Invoice sent through the PayPal sandbox' : 'Invoice send simulated'}: ${r.invoice_id || ''}`;
   return `${live ? 'Refund sent to the PayPal sandbox' : 'Refund executed against a simulated capture'}: ${r.refund_id || ''}`;
 }
