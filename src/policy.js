@@ -179,6 +179,12 @@ function evalPayVendor(args, ctx) {
     rules.push(rule('PAYEE_ON_FILE', 'HOLD', !!vendor, vendor ? `${payee} is the PayPal on file for ${vendor.name}.` : `${payee} is not a vendor on file.`));
   }
 
+  // A payment to a vendor on file is only automatic when the vendor itself asked (authenticated).
+  if (vendor && email.from) {
+    const fromVendor = senderAddress(email.from) === normEmail(vendor.paypal_email) && senderAuthenticated(email);
+    rules.push(rule('REQUESTER_IS_VENDOR', 'HOLD', fromVendor, fromVendor ? `The request comes from ${vendor.name}'s address on file (sender authenticated).` : `The request does not come from ${vendor.name}'s authenticated address on file, so the owner decides.`));
+  }
+
   // Bill matching
   const bills = state.world.open_bills.filter((b) => vendor && b.vendor_id === vendor.id);
   const bill = args.bill_id ? state.world.open_bills.find((b) => b.bill_id === String(args.bill_id).trim().toUpperCase()) : bills.find((b) => sameMoney(b.amount, amount) && b.status === 'open');
