@@ -22,7 +22,8 @@ The model is not deterministic: a live run may differ from the recorded one. Eac
 
 5. Open **"Invoice NW-2207 - soy wax"** (a genuine supplier bill) and run it with Countersign. The $312.50 payment is
    **ALLOWED · EXECUTED** through **PayPal Payouts in the sandbox**: the card shows the real `payout_batch_id`.
-6. Open **"Restock - 12 Cedar & Smoke"**: a real PayPal sandbox invoice is created and sent ($216.00 at the wholesale price; the card shows the `INV2-…` id).
+6. Open **"Restock - 12 Cedar & Smoke"**: an invoice is created and sent at the wholesale price ($216.00; the card shows the `INV2-…` id).
+   *Honest note:* PayPal's Invoicing API answered `403` for this sandbox app during the published run, so the card may say "Simulated" with the reason. The call goes through the same toolkit code path and switches to live once PayPal accepts it.
 7. Open **"Order #1042 - one candle arrived cracked"**: the $24.00 refund is allowed because it equals the unit price on the order.
    *Honest note:* the sandbox account behind the demo refuses card captures, so refunds run against **simulated** captures and the card says "Simulated". The refund call goes through the same PayPal Agent Toolkit code path.
 
