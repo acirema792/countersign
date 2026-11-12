@@ -194,6 +194,34 @@
    "action": "attempt 3: forged-XFF test; /api/health?ip= client_ip_matches; README",
    "outcome": "success",
    "verified": "APPROVE"
+  },
+  {
+   "round": 5,
+   "finding": "J1",
+   "action": "session-scoped /api/runs/:id",
+   "outcome": "success",
+   "verified": "pending"
+  },
+  {
+   "round": 5,
+   "finding": "J2",
+   "action": "IPv6 /64 visitor key; countersign headroom",
+   "outcome": "success",
+   "verified": "pending"
+  },
+  {
+   "round": 5,
+   "finding": "J4",
+   "action": "order-independent server tests",
+   "outcome": "success",
+   "verified": "pending"
+  },
+  {
+   "round": 5,
+   "finding": "J3",
+   "action": "render.yaml TRUST_PROXY_HOPS=3 (owner-approved protected path); README",
+   "outcome": "success",
+   "verified": "pending"
   }
  ]
 }
